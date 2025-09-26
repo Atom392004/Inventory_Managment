@@ -1,0 +1,43 @@
+
+import React from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import Layout from "./components/Layout";
+import LoginPage from "./pages/LoginPage";
+import DashboardPage from "./pages/DashboardPage";
+import ProductsPage from "./pages/ProductsPage";
+import WarehousesPage from "./pages/WarehousesPage";
+import StockMovementsPage from "./pages/StockMovementsPage";
+import ProfilePage from "./pages/ProfilePage";
+import NotFoundPage from "./pages/NotFoundPage";
+import { AuthProvider, useAuth } from "./state/auth";
+import RegisterPage from "./pages/RegisterPage";
+
+function Protected({ children }){
+  const { token } = useAuth();
+  if(!token) return <Navigate to="/login" replace />;
+  return children;
+}
+
+export default function App(){
+  return (
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage/>}/>
+        
+        <Route path="/" element={
+          <Protected>
+            <Layout />
+          </Protected>
+        }>
+          <Route index element={<DashboardPage />} />
+          <Route path="products" element={<ProductsPage />} />
+          <Route path="warehouses" element={<WarehousesPage />} />
+          <Route path="stock-movements" element={<StockMovementsPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+        </Route>
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </AuthProvider>
+  );
+}

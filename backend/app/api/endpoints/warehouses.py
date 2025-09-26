@@ -1,0 +1,162 @@
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from typing import List
+
+from app import models, schemas
+from app.database import get_db
+from app.api.endpoints.auth import get_current_user
+
+router = APIRouter()
+
+@router.post("", response_model=schemas.WarehouseInDB, status_code=201)
+def create_warehouse(payload: schemas.WarehouseCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    existing = db.query(models.Warehouse).filter(models.Warehouse.name == payload.name).first()
+    if existing and (not current_user.is_admin and existing.owner_id != current_user.id):
+        raise HTTPException(status_code=400, detail="Warehouse name already exists")
+
+    wh = models.Warehouse(name=payload.name, location=payload.location, owner_id=current_user.id)
+    db.add(wh)
+    db.commit()
+    db.refresh(wh)
+    return wh
+
+@router.get("", response_model=List[schemas.WarehouseInDB])
+def list_warehouses(db: Session = Depends(get_db), page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200), current_user: models.User = Depends(get_current_user)):
+    # Get warehouses with product count and total value
+    warehouses_query = db.query(
+        models.Warehouse,
+        func.count(models.StockMovement.product_id.distinct()).label("product_count"),
+        func.coalesce(func.sum(models.StockMovement.quantity * models.Product.price), 0).label("total_value")
+    ).outerjoin(
+        models.StockMovement, models.Warehouse.id == models.StockMovement.warehouse_id
+    ).outerjoin(
+        models.Product, models.StockMovement.product_id == models.Product.id
+    ).filter(models.Product.is_active == True)
+
+    if not current_user.is_admin:
+        warehouses_query = warehouses_query.filter(models.Warehouse.owner_id == current_user.id)
+
+    warehouses_query = warehouses_query.group_by(models.Warehouse.id).order_by(models.Warehouse.created_at.desc())
+
+    warehouses_with_stats = warehouses_query.offset((page - 1) * page_size).limit(page_size).all()
+
+    # Convert to response format
+    results = []
+    for warehouse, product_count, total_value in warehouses_with_stats:
+        warehouse_dict = schemas.WarehouseInDB.model_validate(warehouse).model_dump()
+        warehouse_dict["product_count"] = int(product_count)
+        warehouse_dict["total_value"] = float(total_value)
+        results.append(warehouse_dict)
+
+    return results
+
+@router.get("/{warehouse_id}", response_model=schemas.WarehouseInDB)
+def get_warehouse(warehouse_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    wh = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
+    if not wh:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    if not current_user.is_admin and wh.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return wh
+
+@router.put("/{warehouse_id}", response_model=schemas.WarehouseInDB)
+def update_warehouse(warehouse_id: int, payload: schemas.WarehouseCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    wh = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
+    if not wh:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    if not current_user.is_admin and wh.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    # unique name constraint
+    conflict = db.query(models.Warehouse).filter(models.Warehouse.name == payload.name, models.Warehouse.id != warehouse_id).first()
+    if conflict:
+        raise HTTPException(status_code=400, detail="Warehouse name already exists")
+    wh.name = payload.name
+    wh.location = payload.location
+    db.commit()
+    db.refresh(wh)
+    return wh
+
+@router.delete("/{warehouse_id}", status_code=204)
+def delete_warehouse(warehouse_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    wh = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
+    if not wh:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    if not current_user.is_admin and wh.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    db.delete(wh)
+    db.commit()
+    return
+
+@router.get("/{warehouse_id}/details", response_model=schemas.WarehouseDetails)
+def get_warehouse_details(
+    warehouse_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    wh = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
+    if not wh:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    if not current_user.is_admin and wh.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Products in stock > 0 for this warehouse
+    products_in_stock = db.query(
+        models.Product.id,
+        models.Product.name,
+        models.Product.sku,
+        models.Product.price,
+        func.coalesce(func.sum(models.StockMovement.quantity), 0).label("stock")
+    ).outerjoin(
+        models.StockMovement, models.Product.id == models.StockMovement.product_id
+    ).filter(
+        models.StockMovement.warehouse_id == warehouse_id,
+        models.Product.is_active == True
+    ).group_by(
+        models.Product.id, models.Product.name, models.Product.sku, models.Product.price
+    ).having(
+        func.coalesce(func.sum(models.StockMovement.quantity), 0) > 0
+    ).order_by(models.Product.name).all()
+
+    products_list = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "sku": p.sku,
+            "price": float(p.price),
+            "stock": int(p.stock)
+        } for p in products_in_stock
+    ]
+
+    # Recent movements: last 10 for this warehouse
+    recent_movements = db.query(
+        models.StockMovement,
+        models.Product.name.label("product_name"),
+        models.User.username.label("user_name")
+    ).join(models.Product).outerjoin(
+        models.User, models.StockMovement.user_id == models.User.id
+    ).filter(
+        models.StockMovement.warehouse_id == warehouse_id
+    ).order_by(models.StockMovement.created_at.desc()).limit(10).all()
+
+    movements_list = [
+        {
+            "id": m.id,
+            "product_id": m.product_id,
+            "product_name": m.product_name,
+            "warehouse_id": m.warehouse_id,
+            "movement_type": m.movement_type,
+            "quantity": m.quantity,
+            "notes": m.notes,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "reference_id": m.reference_id,
+            "user_id": m.user_id,
+            "user_name": m.user_name or "Unknown"
+        } for m, product_name, user_name in recent_movements
+    ]
+
+    response = schemas.WarehouseDetails.model_validate(wh)
+    response.products_in_stock = products_list
+    response.recent_movements = movements_list
+    return response

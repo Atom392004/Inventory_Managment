@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Inventory Admin</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; padding:24px; background:#f5f7fb}
+    .card{background:white; border-radius:12px; padding:16px; box-shadow:0 6px 18px rgba(20,20,50,0.06); max-width:900px; margin:16px auto}
+    h1{margin:0 0 12px 0}
+    table{width:100%; border-collapse:collapse}
+    th,td{padding:8px 10px; text-align:left; border-bottom:1px solid #eee}
+    button{padding:8px 10px; border-radius:8px; border:0; cursor:pointer}
+    .primary{background:#4f46e5; color:white}
+    .danger{background:#ef4444; color:white}
+    .muted{color:#666; font-size:13px}
+    .topbar{display:flex;justify-content:space-between;align-items:center; margin-bottom:12px}
+    input[type=text]{padding:8px;border-radius:8px;border:1px solid #ddd;width:220px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="topbar">
+      <h1>Admin Dashboard</h1>
+      <div>
+        <input id="token" type="text" placeholder="Paste bearer token here">
+        <button onclick="loadUsers()" class="primary">Load Users</button>
+      </div>
+    </div>
+    <div id="content" class="muted">Click 'Load Users' after pasting an admin bearer token.</div>
+    <div id="users"></div>
+  </div>
+
+<script>
+async function api(path, opts){
+  const token = document.getElementById('token').value.trim();
+  const headers = {"Content-Type":"application/json"};
+  if(token) headers["Authorization"] = "Bearer " + token;
+  const res = await fetch(path, {...opts, headers});
+  if(!res.ok){
+    const txt = await res.text();
+    throw new Error(res.status + " " + txt);
+  }
+  return res.json();
+}
+
+async function loadUsers(){
+  try{
+    document.getElementById('content').textContent = "Loading..."
+    const users = await api('/admin/users');
+    render(users);
+  }catch(e){
+    document.getElementById('content').textContent = "Error: " + e.message;
+  }
+}
+
+function render(users){
+  if(!users || users.length===0){
+    document.getElementById('users').innerHTML = "<div class='muted'>No users</div>";
+    return;
+  }
+  let html = "<table><thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Admin</th><th>Action</th></tr></thead><tbody>";
+  for(const u of users){
+    html += `<tr><td>${u.id}</td><td>${u.username}</td><td>${u.email||''}</td><td>${u.is_admin}</td><td><button onclick="toggle(${u.id})">Toggle Admin</button></td></tr>`;
+  }
+  html += "</tbody></table>";
+  document.getElementById('users').innerHTML = html;
+  document.getElementById('content').textContent = "";
+}
+
+async function toggle(id){
+  try{
+    await api('/admin/users/' + id + '/toggle_admin', {method:'POST'});
+    await loadUsers();
+  }catch(e){
+    alert('Error: ' + e.message);
+  }
+}
+</script>
+</body>
+</html>
