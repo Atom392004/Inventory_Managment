@@ -120,6 +120,7 @@ export default function StockMovementsPage() {
       });
       setStockDistribution({});
       load();
+      window.dispatchEvent(new Event('dashboardRefresh'));
     } catch (e) {
       console.error(e);
       setError("Failed to save: " + (e.response?.data?.detail || e.message));

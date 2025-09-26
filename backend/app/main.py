@@ -3,7 +3,7 @@ from sqlalchemy import text # Add this import to main.py
 from app.database import SessionLocal
 from fastapi import FastAPI
 from app.database import Base, engine, get_db
-from app.api.endpoints import products, warehouses, stock_movements, auth
+from app.api.endpoints import products, warehouses, stock_movements, auth, dashboard
 from sqlalchemy.orm import Session
 from app.core import security
 from app import models
@@ -115,3 +115,4 @@ app.include_router(auth.router, tags=["Auth"])
 app.include_router(products.router, prefix="/products", tags=["Products"])
 app.include_router(warehouses.router, prefix="/warehouses", tags=["Warehouses"])
 app.include_router(stock_movements.router, prefix="/stock-movements", tags=["Stock Movements"])
+app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])

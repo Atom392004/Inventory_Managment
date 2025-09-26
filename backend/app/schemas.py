@@ -28,6 +28,7 @@ class ProductBase(BaseModel):
     sku: str
     description: Optional[str] = None
     price: float = 0.0
+    is_active: bool = True
 
 class ProductCreate(ProductBase):
     pass
@@ -99,3 +100,4 @@ class StockTransferCreate(BaseModel):
 class WarehouseDetails(WarehouseInDB):
     products_in_stock: Optional[List[dict]] = []
     recent_movements: Optional[List[dict]] = []
+    total_value: Optional[float] = 0.0

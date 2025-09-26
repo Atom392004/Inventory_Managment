@@ -58,14 +58,14 @@ export default function WarehousesPage() {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [selectedWarehouse, setSelectedWarehouse] = useState(null);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   async function load() {
     try {
-      const data = await warehouses.list(token);
+      const data = await warehouses.list(token, { page_size: 200 });
       setItems(Array.isArray(data) ? data : []);
       setError(null);
     } catch (e) {
@@ -83,6 +83,7 @@ export default function WarehousesPage() {
       await warehouses.create(payload, token);
       setShowForm(false);
       load();
+      window.dispatchEvent(new Event('dashboardRefresh'));
     } catch (e) {
       alert("Failed to create warehouse: " + (e.body?.detail || e.message));
     }
@@ -93,9 +94,10 @@ export default function WarehousesPage() {
       await warehouses.update(id, payload, token);
       setEditing(null);
       load();
-      if (selectedWarehouse?.id === id) {
+      if (selectedWarehouseId === id) {
         setDetails(null); // Reset details if editing the selected one
       }
+      window.dispatchEvent(new Event('dashboardRefresh'));
     } catch (e) {
       alert("Failed to update warehouse: " + (e.body?.detail || e.message));
     }
@@ -106,10 +108,11 @@ export default function WarehousesPage() {
     try {
       await warehouses.remove(id, token);
       load();
-      if (selectedWarehouse?.id === id) {
-        setSelectedWarehouse(null);
+      if (selectedWarehouseId === id) {
+        setSelectedWarehouseId(null);
         setDetails(null);
       }
+      window.dispatchEvent(new Event('dashboardRefresh'));
     } catch (e) {
       alert("Failed to delete warehouse: " + (e.body?.detail || e.message));
     }
@@ -122,18 +125,20 @@ export default function WarehousesPage() {
     try {
       const data = await warehouses.details(warehouse.id, token);
       setDetails(data);
-      setSelectedWarehouse(warehouse);
+      setSelectedWarehouseId(warehouse.id);
     } catch (e) {
       console.error(e);
       setError("Failed to load warehouse details: " + (e.body?.detail || e.message));
+      setSelectedWarehouseId(null);
+      setDetails(null);
     } finally {
       setLoading(false);
     }
   };
 
   const toggleDetails = (warehouse) => {
-    if (selectedWarehouse?.id === warehouse.id) {
-      setSelectedWarehouse(null);
+    if (selectedWarehouseId === warehouse.id) {
+      setSelectedWarehouseId(null);
       setDetails(null);
     } else {
       loadDetails(warehouse);
@@ -195,11 +200,11 @@ export default function WarehousesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {items.map((warehouse) => {
             const summary = getSummary(warehouse);
-            const isExpanded = selectedWarehouse?.id === warehouse.id;
-            const isLoading = loading && selectedWarehouse?.id === warehouse.id;
+            const isExpanded = selectedWarehouseId === warehouse.id;
+            const isLoading = loading && selectedWarehouseId === warehouse.id;
 
             return (
-              <div key={warehouse.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+              <div key={warehouse.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow flex flex-col min-h-[600px]">
                 {/* Card Header */}
                 <div className="p-6 border-b">
                   <div className="flex justify-between items-start">
@@ -251,11 +256,17 @@ export default function WarehousesPage() {
 
                 {/* Expanded Details */}
                 {isExpanded && (
-                  <div className="p-6">
+                  <div className="p-6 max-h-96 overflow-y-auto">
                     {isLoading ? (
                       <div className="text-center py-8 text-gray-500">Loading details...</div>
                     ) : details ? (
                       <>
+                        {/* Summary */}
+                        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                          <h4 className="text-lg font-semibold mb-2 text-gray-900">Warehouse Summary</h4>
+                          <p className="text-gray-600">Total Value: ${details.total_value.toFixed(2)}</p>
+                        </div>
+
                         {/* Products Table */}
                         <div className="mb-8">
                           <h4 className="text-lg font-semibold mb-4 text-gray-900">Products in Stock</h4>

@@ -14,9 +14,13 @@ router = APIRouter()
 
 @router.post("", response_model=schemas.ProductInDB, status_code=201)
 def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    existing_product = db.query(models.Product).filter(models.Product.sku == product.sku).first()
-    if existing_product:
+    existing_sku = db.query(models.Product).filter(models.Product.sku == product.sku, models.Product.owner_id == current_user.id).first()
+    if existing_sku:
         raise HTTPException(status_code=400, detail="A product with this SKU already exists.")
+
+    existing_name = db.query(models.Product).filter(models.Product.name == product.name, models.Product.owner_id == current_user.id).first()
+    if existing_name:
+        raise HTTPException(status_code=400, detail="A product with this name already exists.")
 
     db_product = models.Product(**product.model_dump(), owner_id=current_user.id)
     db.add(db_product)
@@ -33,6 +37,7 @@ def list_products(
     search: Optional[str] = None,
     created_from_date: Optional[datetime] = None,
     created_to_date: Optional[datetime] = None,
+    include_inactive: bool = Query(False),
     current_user: models.User = Depends(get_current_user)
 ):
     query = db.query(
@@ -42,8 +47,9 @@ def list_products(
         models.StockMovement, models.Product.id == models.StockMovement.product_id
     )
 
-    # filter active
-    query = query.filter(models.Product.is_active == True)
+    # filter active unless include_inactive
+    if not include_inactive:
+        query = query.filter(models.Product.is_active == True)
 
     # non-admin users see only their products
     if not current_user.is_admin:
@@ -134,9 +140,15 @@ def update_product(
 
     # Check for SKU conflict, excluding the current product
     if product.sku != db_product.sku:
-        existing_sku = db.query(models.Product).filter(models.Product.sku == product.sku).first()
+        existing_sku = db.query(models.Product).filter(models.Product.sku == product.sku, models.Product.owner_id == current_user.id).first()
         if existing_sku:
             raise HTTPException(status_code=400, detail="SKU already exists.")
+
+    # Check for name conflict, excluding the current product
+    if product.name != db_product.name:
+        existing_name = db.query(models.Product).filter(models.Product.name == product.name, models.Product.owner_id == current_user.id).first()
+        if existing_name:
+            raise HTTPException(status_code=400, detail="A product with this name already exists.")
 
     for key, value in product.model_dump(exclude_unset=True).items():
         setattr(db_product, key, value)
@@ -147,11 +159,14 @@ def update_product(
 
 @router.delete("/{id}", status_code=204)
 def delete_product(id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    db_product = db.query(models.Product).filter(models.Product.id == id, models.Product.is_active == True).first()
+    db_product = db.query(models.Product).filter(models.Product.id == id).first()
     if not db_product:
-        raise HTTPException(status_code=404, detail="Product not found or is already inactive.")
+        raise HTTPException(status_code=404, detail="Product not found.")
     if not current_user.is_admin and db_product.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
-    db_product.is_active = False
+    # Delete associated stock movements first
+    db.query(models.StockMovement).filter(models.StockMovement.product_id == id).delete()
+    # Then delete the product
+    db.delete(db_product)
     db.commit()
     return

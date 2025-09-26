@@ -60,6 +60,13 @@ function timeAgo(dateString) {
 
   useEffect(() => {
     load();
+    const interval = setInterval(load, 10000); // Refresh every 10 seconds as backup
+    const handleRefresh = () => load();
+    window.addEventListener('dashboardRefresh', handleRefresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('dashboardRefresh', handleRefresh);
+    };
   }, [token]);
 
   return (

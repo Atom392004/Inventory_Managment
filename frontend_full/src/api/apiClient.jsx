@@ -255,9 +255,9 @@ export const products = {
 };
 
 export const warehouses = {
-  list: async (token) => {
+  list: async (token, params = {}) => {
     try {
-      const response = await api.get('/warehouses', { headers: authHeader(token) });
+      const response = await api.get('/warehouses', { headers: authHeader(token), params });
       return response.data;
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to fetch warehouses');

@@ -1,5 +1,5 @@
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, Float
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, Float, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -22,7 +22,7 @@ class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    sku = Column(String(50), unique=True, nullable=False)
+    sku = Column(String(50), nullable=False)
     description = Column(Text)
     price = Column(Float, default=0.0, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
@@ -31,6 +31,11 @@ class Product(Base):
 
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     owner = relationship("User", back_populates="products")
+
+    __table_args__ = (
+        UniqueConstraint('sku', 'owner_id', name='unique_product_sku_per_owner'),
+        UniqueConstraint('name', 'owner_id', name='unique_product_name_per_owner'),
+    )
 
 
 class Warehouse(Base):

@@ -110,6 +110,7 @@ export default function ProductsPage() {
   const [currentFilter, setCurrentFilter] = useState("all"); // "all" | "low_stock"
   const [sortBy, setSortBy] = useState("name"); // "name" | "sku" | "price" | "created_at"
   const [sortOrder, setSortOrder] = useState("asc"); // "asc" | "desc"
+  const [showInactive, setShowInactive] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -122,7 +123,8 @@ export default function ProductsPage() {
       const params = {
         search: searchTerm,
         filter: currentFilter === "low_stock" ? "low_stock" : undefined,
-        sort_by: `${sortBy}_${sortOrder}`
+        sort_by: `${sortBy}_${sortOrder}`,
+        include_inactive: showInactive
       };
       const data = await products.list(params, token);
       setItems(Array.isArray(data) ? data : []);
@@ -137,7 +139,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     load();
-  }, [token, currentFilter, sortBy, sortOrder]);
+  }, [token, currentFilter, sortBy, sortOrder, showInactive]);
 
   const debouncedLoad = useCallback(
     debounce(() => {
@@ -164,6 +166,7 @@ export default function ProductsPage() {
       await products.create(payload, token);
       setShowForm(false);
       load();
+      window.dispatchEvent(new Event('dashboardRefresh'));
     } catch (e) {
       console.error(e);
       setError(e.response?.data?.detail || e.message || "Failed to create product");
@@ -177,6 +180,7 @@ export default function ProductsPage() {
       await products.update(id, payload, token);
       setEditing(null);
       load();
+      window.dispatchEvent(new Event('dashboardRefresh'));
     } catch (e) {
       console.error(e);
       setError(e.response?.data?.detail || e.message || "Failed to update product");
@@ -190,6 +194,7 @@ export default function ProductsPage() {
     try {
       await products.remove(id, token);
       load();
+      window.dispatchEvent(new Event('dashboardRefresh'));
     } catch (e) {
       console.error(e);
       setError(e.response?.data?.detail || e.message || "Failed to delete product");
@@ -269,6 +274,15 @@ export default function ProductsPage() {
           </svg>
           Low Stock
         </button>
+        <label className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+          />
+          <span className="text-sm font-medium text-gray-700">Show Inactive</span>
+        </label>
       </div>
 
       {/* Sorting Bar */}

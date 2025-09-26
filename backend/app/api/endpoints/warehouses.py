@@ -1,7 +1,6 @@
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case, or_
 from typing import List
 
 from app import models, schemas
@@ -12,8 +11,8 @@ router = APIRouter()
 
 @router.post("", response_model=schemas.WarehouseInDB, status_code=201)
 def create_warehouse(payload: schemas.WarehouseCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    existing = db.query(models.Warehouse).filter(models.Warehouse.name == payload.name).first()
-    if existing and (not current_user.is_admin and existing.owner_id != current_user.id):
+    existing = db.query(models.Warehouse).filter(models.Warehouse.name == payload.name, models.Warehouse.owner_id == current_user.id).first()
+    if existing:
         raise HTTPException(status_code=400, detail="Warehouse name already exists")
 
     wh = models.Warehouse(name=payload.name, location=payload.location, owner_id=current_user.id)
@@ -24,19 +23,35 @@ def create_warehouse(payload: schemas.WarehouseCreate, db: Session = Depends(get
 
 @router.get("", response_model=List[schemas.WarehouseInDB])
 def list_warehouses(db: Session = Depends(get_db), page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200), current_user: models.User = Depends(get_current_user)):
-    # Get warehouses with product count and total value
+    # Get net stock per product per warehouse using subquery
+    stock_subq = db.query(
+        models.StockMovement.warehouse_id,
+        models.StockMovement.product_id,
+        func.coalesce(func.sum(models.StockMovement.quantity), 0).label("net_stock")
+    ).group_by(
+        models.StockMovement.warehouse_id, models.StockMovement.product_id
+    ).subquery()
+
+    # Get warehouses with product count (distinct products with net_stock > 0) and total value
     warehouses_query = db.query(
         models.Warehouse,
-        func.count(models.StockMovement.product_id.distinct()).label("product_count"),
-        func.coalesce(func.sum(models.StockMovement.quantity * models.Product.price), 0).label("total_value")
+        func.count(func.distinct(case((stock_subq.c.net_stock > 0, stock_subq.c.product_id), else_=None))).label("product_count"),
+        func.coalesce(func.sum(case((stock_subq.c.net_stock > 0, stock_subq.c.net_stock * models.Product.price), else_=0)), 0).label("total_value")
     ).outerjoin(
-        models.StockMovement, models.Warehouse.id == models.StockMovement.warehouse_id
+        stock_subq, models.Warehouse.id == stock_subq.c.warehouse_id
     ).outerjoin(
-        models.Product, models.StockMovement.product_id == models.Product.id
-    ).filter(models.Product.is_active == True)
+        models.Product, stock_subq.c.product_id == models.Product.id
+    )
 
     if not current_user.is_admin:
-        warehouses_query = warehouses_query.filter(models.Warehouse.owner_id == current_user.id)
+        warehouses_query = warehouses_query.filter(
+            models.Warehouse.owner_id == current_user.id,
+            or_(models.Product.id.is_(None), models.Product.owner_id == current_user.id)
+        )
+    else:
+        warehouses_query = warehouses_query.filter(
+            or_(models.Product.id.is_(None), models.Product.is_active == True)
+        )
 
     warehouses_query = warehouses_query.group_by(models.Warehouse.id).order_by(models.Warehouse.created_at.desc())
 
@@ -69,7 +84,7 @@ def update_warehouse(warehouse_id: int, payload: schemas.WarehouseCreate, db: Se
     if not current_user.is_admin and wh.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
     # unique name constraint
-    conflict = db.query(models.Warehouse).filter(models.Warehouse.name == payload.name, models.Warehouse.id != warehouse_id).first()
+    conflict = db.query(models.Warehouse).filter(models.Warehouse.name == payload.name, models.Warehouse.id != warehouse_id, models.Warehouse.owner_id == current_user.id).first()
     if conflict:
         raise HTTPException(status_code=400, detail="Warehouse name already exists")
     wh.name = payload.name
@@ -101,50 +116,70 @@ def get_warehouse_details(
     if not current_user.is_admin and wh.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    # Products in stock > 0 for this warehouse
+    # Products in stock > 0 for this warehouse using subquery
+    stock_subq = db.query(
+        models.StockMovement.product_id,
+        func.coalesce(func.sum(models.StockMovement.quantity), 0).label("stock")
+    ).filter(
+        models.StockMovement.warehouse_id == warehouse_id
+    ).group_by(
+        models.StockMovement.product_id
+    ).subquery()
+
     products_in_stock = db.query(
         models.Product.id,
         models.Product.name,
         models.Product.sku,
         models.Product.price,
-        func.coalesce(func.sum(models.StockMovement.quantity), 0).label("stock")
+        func.coalesce(stock_subq.c.stock, 0).label("stock")
     ).outerjoin(
-        models.StockMovement, models.Product.id == models.StockMovement.product_id
+        stock_subq, models.Product.id == stock_subq.c.product_id
     ).filter(
-        models.StockMovement.warehouse_id == warehouse_id,
-        models.Product.is_active == True
-    ).group_by(
-        models.Product.id, models.Product.name, models.Product.sku, models.Product.price
-    ).having(
-        func.coalesce(func.sum(models.StockMovement.quantity), 0) > 0
-    ).order_by(models.Product.name).all()
+        models.Product.is_active == True,
+        func.coalesce(stock_subq.c.stock, 0) > 0
+    )
+
+    if not current_user.is_admin:
+        products_in_stock = products_in_stock.filter(models.Product.owner_id == current_user.id)
+
+    products_in_stock = products_in_stock.order_by(models.Product.name).all()
 
     products_list = [
         {
-            "id": p.id,
-            "name": p.name,
-            "sku": p.sku,
-            "price": float(p.price),
-            "stock": int(p.stock)
-        } for p in products_in_stock
+            "id": id,
+            "name": name,
+            "sku": sku,
+            "price": float(price),
+            "stock": int(stock)
+        } for id, name, sku, price, stock in products_in_stock
     ]
 
-    # Recent movements: last 10 for this warehouse
-    recent_movements = db.query(
+    # Recent movements: last 10 for this warehouse, filtered by user's products
+    recent_movements_query = db.query(
         models.StockMovement,
         models.Product.name.label("product_name"),
         models.User.username.label("user_name")
-    ).join(models.Product).outerjoin(
+    ).join(
+        models.Product, models.StockMovement.product_id == models.Product.id
+    ).outerjoin(
         models.User, models.StockMovement.user_id == models.User.id
     ).filter(
-        models.StockMovement.warehouse_id == warehouse_id
-    ).order_by(models.StockMovement.created_at.desc()).limit(10).all()
+        models.StockMovement.warehouse_id == warehouse_id,
+        models.Product.is_active == True
+    )
+
+    if not current_user.is_admin:
+        recent_movements_query = recent_movements_query.filter(
+            models.Product.owner_id == current_user.id
+        )
+
+    recent_movements = recent_movements_query.order_by(models.StockMovement.created_at.desc()).limit(10).all()
 
     movements_list = [
         {
             "id": m.id,
             "product_id": m.product_id,
-            "product_name": m.product_name,
+            "product_name": product_name,
             "warehouse_id": m.warehouse_id,
             "movement_type": m.movement_type,
             "quantity": m.quantity,
@@ -152,11 +187,15 @@ def get_warehouse_details(
             "created_at": m.created_at.isoformat() if m.created_at else None,
             "reference_id": m.reference_id,
             "user_id": m.user_id,
-            "user_name": m.user_name or "Unknown"
+            "user_name": user_name or "Unknown"
         } for m, product_name, user_name in recent_movements
     ]
+
+    # Calculate total value
+    total_value = sum(p["price"] * p["stock"] for p in products_list)
 
     response = schemas.WarehouseDetails.model_validate(wh)
     response.products_in_stock = products_list
     response.recent_movements = movements_list
+    response.total_value = total_value
     return response
