@@ -28,11 +28,11 @@ export default function StockMovementsPage() {
     try {
       const [m, p, w] = await Promise.all([
         stockMovements.list(token),
-        products.list(null, token),
+        products.list({ include_inactive: false }, token),
         warehouses.list(token),
       ]);
       setMovements(Array.isArray(m) ? m : []);
-      setProductsList(Array.isArray(p) ? p : []);
+      setProductsList(Array.isArray(p.data) ? p.data : []);
       setWarehousesList(Array.isArray(w) ? w : []);
     } catch (e) {
       console.error(e);

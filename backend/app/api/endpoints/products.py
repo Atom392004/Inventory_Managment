@@ -28,18 +28,43 @@ def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db)
     db.refresh(db_product)
     return db_product
 
-@router.get("", response_model=List[schemas.ProductSummary])
+@router.get("")
 def list_products(
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    sort_by: str = Query("created_at_desc", pattern="^(name|sku|price|created_at)_(asc|desc)$"),
+    sort_by: str = Query("created_at_desc", pattern="^(name|sku|price|created_at|stock)_(asc|desc)$"),
     search: Optional[str] = None,
     created_from_date: Optional[datetime] = None,
     created_to_date: Optional[datetime] = None,
     include_inactive: bool = Query(False),
     current_user: models.User = Depends(get_current_user)
 ):
+    # Count query for total
+    count_query = db.query(func.count(models.Product.id))
+
+    # filter active unless include_inactive
+    if not include_inactive:
+        count_query = count_query.filter(models.Product.is_active == True)
+
+    # non-admin users see only their products
+    if not current_user.is_admin:
+        count_query = count_query.filter(models.Product.owner_id == current_user.id)
+
+    if search:
+        count_query = count_query.filter(or_(
+            models.Product.name.ilike(f"%{search}%"),
+            models.Product.sku.ilike(f"%{search}%")
+        ))
+
+    if created_from_date:
+        count_query = count_query.filter(models.Product.created_at >= created_from_date)
+
+    if created_to_date:
+        count_query = count_query.filter(models.Product.created_at <= created_to_date)
+
+    total = count_query.scalar()
+
     query = db.query(
         models.Product,
         func.coalesce(func.sum(models.StockMovement.quantity), 0).label("total_stock")
@@ -91,13 +116,23 @@ def list_products(
         product_summary.total_stock = int(total_stock)
         results.append(product_summary)
 
-    return results
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+
+    return {
+        "data": results,
+        "pagination": {
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages
+        }
+    }
 
 @router.get("/{id}", response_model=schemas.ProductDetails)
 def get_product_details(id: int = Path(...), db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    product = db.query(models.Product).filter(models.Product.id == id, models.Product.is_active == True).first()
+    product = db.query(models.Product).filter(models.Product.id == id).first()
     if not product:
-        raise HTTPException(status_code=404, detail="Product not found or is inactive.")
+        raise HTTPException(status_code=404, detail="Product not found.")
     if not current_user.is_admin and product.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
     # Calculate stock distribution per warehouse
@@ -132,9 +167,9 @@ def update_product(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    db_product = db.query(models.Product).filter(models.Product.id == id, models.Product.is_active == True).first()
+    db_product = db.query(models.Product).filter(models.Product.id == id).first()
     if not db_product:
-        raise HTTPException(status_code=404, detail="Product not found or is inactive.")
+        raise HTTPException(status_code=404, detail="Product not found.")
     if not current_user.is_admin and db_product.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
 

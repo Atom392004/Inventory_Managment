@@ -111,6 +111,9 @@ export default function ProductsPage() {
   const [sortBy, setSortBy] = useState("name"); // "name" | "sku" | "price" | "created_at"
   const [sortOrder, setSortOrder] = useState("asc"); // "asc" | "desc"
   const [showInactive, setShowInactive] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [pagination, setPagination] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -124,14 +127,18 @@ export default function ProductsPage() {
         search: searchTerm,
         filter: currentFilter === "low_stock" ? "low_stock" : undefined,
         sort_by: `${sortBy}_${sortOrder}`,
-        include_inactive: showInactive
+        include_inactive: showInactive,
+        page: page,
+        page_size: pageSize
       };
-      const data = await products.list(params, token);
-      setItems(Array.isArray(data) ? data : []);
+      const response = await products.list(params, token);
+      setItems(Array.isArray(response.data) ? response.data : []);
+      setPagination(response.pagination || null);
     } catch (e) {
       console.error(e);
       setError(e.response?.data?.detail || e.message || "Failed to load products");
       setItems([]);
+      setPagination(null);
     } finally {
       setLoading(false);
     }
@@ -139,10 +146,11 @@ export default function ProductsPage() {
 
   useEffect(() => {
     load();
-  }, [token, currentFilter, sortBy, sortOrder, showInactive]);
+  }, [token, currentFilter, sortBy, sortOrder, showInactive, page, pageSize]);
 
   const debouncedLoad = useCallback(
     debounce(() => {
+      setPage(1); // Reset to first page on search/filter change
       load();
     }, 500),
     [searchTerm, currentFilter, sortBy, sortOrder]
@@ -285,33 +293,52 @@ export default function ProductsPage() {
         </label>
       </div>
 
-      {/* Sorting Bar */}
-      <div className="flex items-center gap-4">
-        <label className="text-sm font-medium text-gray-700">Sort by:</label>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-          <option value="name">Name</option>
-          <option value="sku">SKU</option>
-          <option value="price">Price</option>
-          <option value="created_at">Created At</option>
-        </select>
-        <Button
-          variant="ghost"
-          onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-        >
-          {sortOrder === "asc" ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8v12m0 0l4-4m-4 4l-4-4m6 0V4m0 0l4 4m-4-4l-4 4" />
-            </svg>
-          )}
-        </Button>
+      {/* Sorting and Pagination Bar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <label className="text-sm font-medium text-gray-700">Sort by:</label>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="name">Name</option>
+            <option value="sku">SKU</option>
+            <option value="price">Price</option>
+            <option value="created_at">Created At</option>
+            <option value="stock">Stock</option>
+          </select>
+          <Button
+            variant="ghost"
+            onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+          >
+            {sortOrder === "asc" ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8v12m0 0l4-4m-4 4l-4-4m6 0V4m0 0l4 4m-4-4l-4 4" />
+              </svg>
+            )}
+          </Button>
+        </div>
+        <div className="flex items-center gap-4">
+          <label className="text-sm font-medium text-gray-700">Items per page:</label>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(parseInt(e.target.value));
+              setPage(1); // Reset to first page
+            }}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
       </div>
 
       {showForm && (
@@ -447,6 +474,55 @@ export default function ProductsPage() {
           </Card>
         )}
       </div>
+
+      {/* Pagination */}
+      {pagination && pagination.total_pages > 1 && (
+        <div className="flex items-center justify-between mt-8">
+          <div className="text-sm text-gray-700">
+            Showing {((pagination.page - 1) * pagination.page_size) + 1} to {Math.min(pagination.page * pagination.page_size, pagination.total)} of {pagination.total} products
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setPage(page - 1)}
+              disabled={page <= 1}
+              className="px-3 py-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Previous
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, pagination.total_pages) }, (_, i) => {
+                const pageNum = Math.max(1, Math.min(pagination.total_pages - 4, page - 2)) + i;
+                if (pageNum > pagination.total_pages) return null;
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={pageNum === page ? "primary" : "ghost"}
+                    onClick={() => setPage(pageNum)}
+                    className="px-3 py-2 min-w-[40px]"
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            <Button
+              variant="ghost"
+              onClick={() => setPage(page + 1)}
+              disabled={page >= pagination.total_pages}
+              className="px-3 py-2"
+            >
+              Next
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
