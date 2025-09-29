@@ -38,30 +38,57 @@ def list_products(
     created_from_date: Optional[datetime] = None,
     created_to_date: Optional[datetime] = None,
     include_inactive: bool = Query(False),
+    filter: Optional[str] = Query(None, pattern="^(low_stock)$"),
     current_user: models.User = Depends(get_current_user)
 ):
     # Count query for total
-    count_query = db.query(func.count(models.Product.id))
+    if filter == "low_stock":
+        # For low_stock, count products with total_stock <= 10
+        subq = db.query(
+            models.Product.id,
+            func.coalesce(func.sum(models.StockMovement.quantity), 0).label("total_stock")
+        ).outerjoin(
+            models.StockMovement, models.Product.id == models.StockMovement.product_id
+        ).group_by(models.Product.id).subquery()
 
-    # filter active unless include_inactive
-    if not include_inactive:
-        count_query = count_query.filter(models.Product.is_active == True)
+        count_query = db.query(func.count(subq.c.id)).select_from(subq).filter(subq.c.total_stock <= 10)
 
-    # non-admin users see only their products
-    if not current_user.is_admin:
-        count_query = count_query.filter(models.Product.owner_id == current_user.id)
+        # Apply same filters to subq
+        if not include_inactive:
+            count_query = count_query.join(models.Product, models.Product.id == subq.c.id).filter(models.Product.is_active == True)
+        if not current_user.is_admin:
+            count_query = count_query.filter(models.Product.owner_id == current_user.id)
+        if search:
+            count_query = count_query.filter(or_(
+                models.Product.name.ilike(f"%{search}%"),
+                models.Product.sku.ilike(f"%{search}%")
+            ))
+        if created_from_date:
+            count_query = count_query.filter(models.Product.created_at >= created_from_date)
+        if created_to_date:
+            count_query = count_query.filter(models.Product.created_at <= created_to_date)
+    else:
+        count_query = db.query(func.count(models.Product.id))
 
-    if search:
-        count_query = count_query.filter(or_(
-            models.Product.name.ilike(f"%{search}%"),
-            models.Product.sku.ilike(f"%{search}%")
-        ))
+        # filter active unless include_inactive
+        if not include_inactive:
+            count_query = count_query.filter(models.Product.is_active == True)
 
-    if created_from_date:
-        count_query = count_query.filter(models.Product.created_at >= created_from_date)
+        # non-admin users see only their products
+        if not current_user.is_admin:
+            count_query = count_query.filter(models.Product.owner_id == current_user.id)
 
-    if created_to_date:
-        count_query = count_query.filter(models.Product.created_at <= created_to_date)
+        if search:
+            count_query = count_query.filter(or_(
+                models.Product.name.ilike(f"%{search}%"),
+                models.Product.sku.ilike(f"%{search}%")
+            ))
+
+        if created_from_date:
+            count_query = count_query.filter(models.Product.created_at >= created_from_date)
+
+        if created_to_date:
+            count_query = count_query.filter(models.Product.created_at <= created_to_date)
 
     total = count_query.scalar()
 
@@ -92,6 +119,12 @@ def list_products(
     if created_to_date:
         query = query.filter(models.Product.created_at <= created_to_date)
 
+    query = query.group_by(models.Product.id)
+
+    # Apply filter after grouping
+    if filter == "low_stock":
+        query = query.having(func.coalesce(func.sum(models.StockMovement.quantity), 0) <= 10)
+
     # Apply sorting
     sort_column, sort_order = sort_by.rsplit('_', 1)
     if sort_column == 'price':
@@ -105,8 +138,6 @@ def list_products(
         query = query.order_by(sort_field.desc())
     else:
         query = query.order_by(sort_field.asc())
-
-    query = query.group_by(models.Product.id)
 
     products_with_stock = query.offset((page - 1) * page_size).limit(page_size).all()
 

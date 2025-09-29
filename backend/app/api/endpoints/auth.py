@@ -51,12 +51,15 @@ def get_current_admin(current_user: models.User = Depends(get_current_user)):
 def register(payload: schemas.UserCreate, db: Session = Depends(get_db)):
     """Registers a new user."""
     try:
-        # Check if user with username or email already exists
-        existing = db.query(models.User).filter(
-            (models.User.username == payload.username) | (models.User.email == payload.email)
-        ).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="Username or Email already exists")
+        # Check if username already exists
+        existing_username = db.query(models.User).filter(models.User.username == payload.username).first()
+        if existing_username:
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+        # Check if email already exists
+        existing_email = db.query(models.User).filter(models.User.email == payload.email).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email already exists")
 
         # Hash password and create new user
         hashed = security.get_password_hash(payload.password)
@@ -128,3 +131,74 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def get_me(current_user: models.User = Depends(get_current_user)):
     """Returns the current user's details."""
     return current_user
+
+@router.put("/me", response_model=schemas.UserRead)
+def update_me(payload: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Updates the current user's profile."""
+    try:
+        # Check if username is being updated and if it already exists
+        if payload.username and payload.username != current_user.username:
+            existing_username = db.query(models.User).filter(models.User.username == payload.username).first()
+            if existing_username:
+                raise HTTPException(status_code=400, detail="Username already exists")
+
+        # Check if email is being updated and if it already exists
+        if payload.email and payload.email != current_user.email:
+            existing_email = db.query(models.User).filter(models.User.email == payload.email).first()
+            if existing_email:
+                raise HTTPException(status_code=400, detail="Email already exists")
+
+        # Update fields
+        if payload.username:
+            current_user.username = payload.username
+        if payload.email:
+            current_user.email = payload.email
+
+        db.commit()
+        db.refresh(current_user)
+        return current_user
+    except HTTPException as e:
+        raise e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Database error during profile update: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update profile due to a database error."
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during profile update: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during profile update."
+        )
+
+@router.post("/change-password")
+def change_password(payload: schemas.ChangePassword, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Changes the current user's password."""
+    try:
+        # Verify old password
+        if not security.verify_password(payload.old_password, current_user.hashed_password):
+            raise HTTPException(status_code=400, detail="Incorrect old password")
+
+        # Hash new password and update
+        hashed = security.get_password_hash(payload.new_password)
+        current_user.hashed_password = hashed
+
+        db.commit()
+        return {"message": "Password changed successfully"}
+    except HTTPException as e:
+        raise e
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Database error during password change: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to change password due to a database error."
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during password change: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during password change."
+        )

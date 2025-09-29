@@ -1,48 +1,76 @@
 import React, { useEffect, useState } from "react";
 import { dashboard, stockMovements } from "../api/apiClient.jsx";
 import { useAuth } from "../state/auth";
-import { Package, Warehouse, ArrowLeftRight, AlertCircle } from "lucide-react";
+import { Package, Warehouse, ArrowLeftRight, AlertCircle, BarChart3, TrendingUp } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+} from "recharts";
 
 export default function DashboardPage() {
   const { token } = useAuth();
   const [stats, setStats] = useState({ products: 0, warehouses: 0, movements: 0, total_stock: 0, low_stock_items: 0 });
   const [recentMovements, setRecentMovements] = useState([]);
   const [lowStockProducts, setLowStockProducts] = useState([]);
+  const [stockMovementsTrend, setStockMovementsTrend] = useState([]);
+  const [stockByWarehouse, setStockByWarehouse] = useState([]);
+  const [topProductsByValue, setTopProductsByValue] = useState([]);
+  const [stockValueTrend, setStockValueTrend] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   async function load() {
     setLoading(true);
+    setError(null);
     try {
       const [statsRes, movementsRes] = await Promise.allSettled([
         dashboard.stats(token),
         stockMovements.list(token),
       ]);
 
-      const statsData =
-        statsRes.status === "fulfilled" && statsRes.value
-          ? statsRes.value
-          : { total_products: 0, total_warehouses: 0, total_stock: 0, low_stock_items: 0, low_stock_products: [] };
-      const movementsData =
-        movementsRes.status === "fulfilled" && Array.isArray(movementsRes.value)
-          ? movementsRes.value
-          : [];
+      if (statsRes.status === "rejected") {
+        if (statsRes.reason?.status === 503) {
+          setError("Database service is currently unavailable. Please check the backend connection.");
+        } else {
+          setError("Failed to load dashboard data.");
+        }
+        setStats({ products: 0, warehouses: 0, movements: 0, total_stock: 0, low_stock_items: 0 });
+        setLowStockProducts([]);
+        return;
+      }
+
+      const statsData = statsRes.value || { total_products: 0, total_warehouses: 0, total_stock: 0, low_stock_items: 0, low_stock_products: [] };
+      const movementsData = movementsRes.status === "fulfilled" && Array.isArray(movementsRes.value) ? movementsRes.value : [];
 
       setStats({
-        products: statsData.total_products,
-        warehouses: statsData.total_warehouses,
+        products: statsData.total_products || 0,
+        warehouses: statsData.total_warehouses || 0,
         movements: movementsData.length,
-        total_stock: statsData.total_stock,
-        low_stock_items: statsData.low_stock_items,
+        total_stock: statsData.total_stock || 0,
+        low_stock_items: statsData.low_stock_items || 0,
       });
 
       setLowStockProducts(statsData.low_stock_products || []);
+      setStockMovementsTrend(statsData.stock_movements_trend || []);
+      setStockByWarehouse(statsData.stock_by_warehouse || []);
+      setTopProductsByValue(statsData.top_products_by_value || []);
+      setStockValueTrend(statsData.stock_value_trend || []);
       setRecentMovements(movementsData.slice(0, 5)); // latest 5 movements
     } catch (e) {
       console.error(e);
-  } finally {
-    setLoading(false);
+      setError("An unexpected error occurred while loading data.");
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
 function timeAgo(dateString) {
   const now = new Date();
@@ -68,6 +96,29 @@ function timeAgo(dateString) {
       window.removeEventListener('dashboardRefresh', handleRefresh);
     };
   }, [token]);
+
+  if (error) {
+    return (
+      <div className="space-y-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
+          <p className="text-gray-600 mt-2">Welcome back! Here's your inventory overview.</p>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600" />
+            <p className="text-red-800">{error}</p>
+          </div>
+          <button
+            onClick={load}
+            className="mt-4 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -136,6 +187,9 @@ function timeAgo(dateString) {
                   </div>
                 </li>
               ))}
+              {lowStockProducts.length === 0 && !loading && (
+                <p className="text-gray-500 text-sm">No low stock items.</p>
+              )}
             </ul>
           </div>
         </div>
@@ -178,7 +232,61 @@ function timeAgo(dateString) {
                   </li>
                 );
               })}
+              {recentMovements.length === 0 && !loading && (
+                <p className="text-gray-500 text-sm">No recent movements.</p>
+              )}
             </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Analytics Section with Graphs */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Stock Movements Trend Line Chart */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-800">Stock Movements Trend</h2>
+            </div>
+            {stockMovementsTrend.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={stockMovementsTrend}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="total_quantity" stroke="#3B82F6" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-gray-500 text-sm">No trend data available.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Stock by Warehouse Bar Chart */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <BarChart3 className="w-5 h-5 text-green-600" />
+              <h2 className="text-lg font-semibold text-gray-800">Stock by Warehouse</h2>
+            </div>
+            {stockByWarehouse.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={stockByWarehouse}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="warehouse_name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="total_stock" fill="#10B981" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-gray-500 text-sm">No warehouse data available.</p>
+            )}
           </div>
         </div>
       </div>

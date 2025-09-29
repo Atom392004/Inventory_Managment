@@ -53,7 +53,7 @@ def get_dashboard_stats(db: Session = Depends(get_db), current_user = Depends(ge
     # Get recent stock movements (last 6 months)
     six_months_ago = datetime.utcnow() - timedelta(days=180)
     recent_movements_query = db.query(
-        func.date_trunc('month', StockMovement.created_at).label('month'),
+        func.to_char(StockMovement.created_at, 'YYYY-MM').label('month'),
         func.sum(StockMovement.quantity).label('total_quantity')
     ).join(Product).filter(
         StockMovement.created_at >= six_months_ago
@@ -61,7 +61,7 @@ def get_dashboard_stats(db: Session = Depends(get_db), current_user = Depends(ge
     if not current_user.is_admin:
         recent_movements_query = recent_movements_query.filter(Product.owner_id == current_user.id)
     recent_movements = recent_movements_query.group_by(
-        func.date_trunc('month', StockMovement.created_at)
+        func.to_char(StockMovement.created_at, 'YYYY-MM')
     ).order_by(
         'month'
     ).all()
@@ -82,7 +82,36 @@ def get_dashboard_stats(db: Session = Depends(get_db), current_user = Depends(ge
     stock_by_warehouse = stock_by_warehouse_query.group_by(
         Warehouse.name
     ).all()
-    
+
+    # Get top 5 products by stock value
+    top_products_query = db.query(
+        Product.id,
+        Product.name,
+        Product.price,
+        func.sum(StockMovement.quantity).label('total_stock'),
+        (Product.price * func.sum(StockMovement.quantity)).label('total_value')
+    ).join(StockMovement).group_by(Product.id, Product.name, Product.price)
+    if not current_user.is_admin:
+        top_products_query = top_products_query.filter(Product.owner_id == current_user.id)
+    top_products = top_products_query.order_by(
+        desc((Product.price * func.sum(StockMovement.quantity)))
+    ).limit(5).all()
+
+    # Get stock value trend (last 6 months)
+    value_trend_query = db.query(
+        func.to_char(StockMovement.created_at, 'YYYY-MM').label('month'),
+        func.sum(StockMovement.quantity * Product.price).label('total_value')
+    ).join(Product).filter(
+        StockMovement.created_at >= six_months_ago
+    )
+    if not current_user.is_admin:
+        value_trend_query = value_trend_query.filter(Product.owner_id == current_user.id)
+    value_trend = value_trend_query.group_by(
+        func.to_char(StockMovement.created_at, 'YYYY-MM')
+    ).order_by(
+        'month'
+    ).all()
+
     return {
         "total_products": total_products,
         "total_warehouses": total_warehouses,
@@ -99,7 +128,7 @@ def get_dashboard_stats(db: Session = Depends(get_db), current_user = Depends(ge
         ],
         "stock_movements_trend": [
             {
-                "month": movement[0].strftime("%Y-%m"),
+                "month": movement[0],
                 "total_quantity": movement[1]
             }
             for movement in recent_movements
@@ -110,5 +139,22 @@ def get_dashboard_stats(db: Session = Depends(get_db), current_user = Depends(ge
                 "total_stock": item[1]
             }
             for item in stock_by_warehouse
+        ],
+        "top_products_by_value": [
+            {
+                "id": str(p[0]),
+                "name": p[1],
+                "price": float(p[2]),
+                "total_stock": p[3],
+                "total_value": float(p[4])
+            }
+            for p in top_products
+        ],
+        "stock_value_trend": [
+            {
+                "month": v[0],
+                "total_value": float(v[1])
+            }
+            for v in value_trend
         ]
     }

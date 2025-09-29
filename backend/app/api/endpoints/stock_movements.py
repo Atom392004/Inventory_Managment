@@ -46,18 +46,6 @@ def record_stock_movement(
     else:
         quantity = abs(movement.quantity)
 
-    # For incoming movements, ensure product is not already stocked in another warehouse
-    if quantity > 0:
-        other_warehouses_stock = db.query(func.coalesce(func.sum(models.StockMovement.quantity), 0)).filter(
-            models.StockMovement.product_id == movement.product_id,
-            models.StockMovement.warehouse_id != movement.warehouse_id
-        ).scalar()
-        if int(other_warehouses_stock) > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Product is already stocked in another warehouse. Cannot add stock here."
-            )
-
     # Validate stock for outgoing movements
     if quantity < 0:
         current_stock = get_current_stock(db, movement.product_id, movement.warehouse_id)

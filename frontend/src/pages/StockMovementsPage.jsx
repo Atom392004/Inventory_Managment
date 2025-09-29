@@ -50,15 +50,8 @@ export default function StockMovementsPage() {
     try {
       const data = await stockMovements.getStockDistribution(productId, token);
       setStockDistribution(data.stock_distribution || {});
-      // Check if product is already in another warehouse
-      const hasOtherStock = Object.keys(data.stock_distribution).some(
-        (whId) => whId != form.warehouse_id && data.stock_distribution[whId].stock > 0
-      );
-      if (hasOtherStock && form.warehouse_id) {
-        setError("Product is already stocked in another warehouse. Cannot add stock here.");
-      } else {
-        setError("");
-      }
+      // Allow adding to any warehouse, even if product exists in others
+      setError("");
     } catch (e) {
       console.error(e);
       setError("Failed to check stock distribution: " + (e.response?.data?.detail || e.message));
@@ -263,7 +256,6 @@ export default function StockMovementsPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-100 text-left">
             <tr>
-              <th className="p-2">ID</th>
               <th className="p-2">Product</th>
               <th className="p-2">Warehouse</th>
               <th className="p-2">Qty</th>
@@ -276,7 +268,6 @@ export default function StockMovementsPage() {
           <tbody>
             {movements.map((m) => (
               <tr key={m.id} className="border-t hover:bg-gray-50">
-                <td className="p-2">{m.id}</td>
                 <td className="p-2">{getProductName(m.product_id)}</td>
                 <td className="p-2">{getWarehouseName(m.warehouse_id)}</td>
                 <td className="p-2">{m.quantity}</td>

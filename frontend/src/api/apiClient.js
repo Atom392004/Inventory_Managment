@@ -107,6 +107,30 @@ export const auth = {
       throw error;
     }
   },
+
+  update: async (data, token) => {
+    try {
+      const response = await api.put("/auth/me", data, {
+        headers: { ...authHeader(token), "Content-Type": "application/json" },
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Profile update failed:", error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  changePassword: async (data, token) => {
+    try {
+      const response = await api.post("/auth/change-password", data, {
+        headers: { ...authHeader(token), "Content-Type": "application/json" },
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Password change failed:", error.response?.data || error.message);
+      throw error;
+    }
+  },
 };
 
 // --- Stock Movements ---
@@ -255,6 +279,21 @@ export const warehouses = {
       return response.data;
     } catch (error) {
       console.error("Failed to delete warehouse:", error.response?.data || error.message);
+      throw error;
+    }
+  },
+};
+
+// --- Dashboard ---
+export const dashboard = {
+  stats: async (token) => {
+    try {
+      const response = await api.get("/dashboard/stats", {
+        headers: authHeader(token),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch dashboard stats:", error.response?.data || error.message);
       throw error;
     }
   },
