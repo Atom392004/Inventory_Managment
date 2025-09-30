@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import ProductsPage from "./pages/ProductsPage";
 import WarehousesPage from "./pages/WarehousesPage";
 import StockMovementsPage from "./pages/StockMovementsPage";
+import ScrapedProductsPage from "./pages/ScrapedProductsPage";
 import ProfilePage from "./pages/ProfilePage";
 import NotFoundPage from "./pages/NotFoundPage";
 import { AuthProvider, useAuth } from "./state/auth";
@@ -34,6 +35,7 @@ export default function App(){
           <Route path="products" element={<ProductsPage />} />
           <Route path="warehouses" element={<WarehousesPage />} />
           <Route path="stock-movements" element={<StockMovementsPage />} />
+          <Route path="scraped-products" element={<ScrapedProductsPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />

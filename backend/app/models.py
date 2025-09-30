@@ -91,3 +91,15 @@ class StockMovement(Base):
 
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     user = relationship("User", back_populates="stock_movements")
+
+class ScrapedProduct(Base):
+    __tablename__ = "scraped_products"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String(255), nullable=True)
+    price = Column(Float, nullable=False)
+    rating = Column(Float, nullable=True)
+    image_url = Column(String(500), nullable=True)
+    availability = Column(String(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

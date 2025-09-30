@@ -72,7 +72,7 @@ export const auth = {
 
       console.log('Attempting login for username:', username);
       const formData = toFormData({ username, password });
-      
+
       const response = await api.post('/auth/login', formData, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -81,11 +81,11 @@ export const auth = {
         withCredentials: true,
         timeout: 5000
       });
-      
+
       if (!response.data || !response.data.access_token) {
         throw new Error('Invalid response from server');
       }
-      
+
       console.log('Login successful');
       return response.data;
     } catch (error) {
@@ -95,19 +95,19 @@ export const auth = {
         message: error.message,
         code: error.code
       });
-      
+
       if (error.code === 'ECONNABORTED') {
         throw new Error('Connection timed out. Please try again.');
       }
-      
+
       if (!error.response) {
         throw new Error('Network error. Please check your connection.');
       }
-      
+
       if (error.response.status === 401) {
         throw new Error('Invalid username or password');
       }
-      
+
       throw new Error(error.response?.data?.detail || 'Login failed. Please try again.');
     }
   },
@@ -330,6 +330,17 @@ export const dashboard = {
       return response.data;
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to fetch user analytics');
+    }
+  }
+};
+
+export const scrapedProducts = {
+  list: async (token) => {
+    try {
+      const response = await api.get('/scraped-products', { headers: authHeader(token) });
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to fetch scraped products');
     }
   }
 };

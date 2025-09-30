@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+ta#!/usr/bin/env python3
 
 import sys
 import os
@@ -9,22 +9,27 @@ from backend.app import models
 from backend.app.core.security import get_password_hash
 
 def add_admin():
+    admin_username = os.getenv("ADMIN_USERNAME", "admin")
+    admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    admin_location = os.getenv("ADMIN_LOCATION", "Headquarters")
+
     db = SessionLocal()
     try:
         # Check if admin already exists
-        existing_admin = db.query(models.User).filter(models.User.role == " admin\).first()
+        existing_admin = db.query(models.User).filter(models.User.username == admin_username).first()
         if existing_admin:
             print("Admin user already exists.")
             return
 
         # Create admin user
-        hashed_password = get_password_hash("admin123")  # Change this password
+        hashed_password = get_password_hash(admin_password)
         admin_user = models.User(
-            username="admin",
-            email="admin@example.com",
+            username=admin_username,
+            email=admin_email,
             hashed_password=hashed_password,
-            role=" admin\,
-            location="Headquarters"
+            role="admin",
+            location=admin_location
         )
         db.add(admin_user)
         db.commit()

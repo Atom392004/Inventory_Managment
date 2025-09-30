@@ -1,4 +1,3 @@
-
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -7,11 +6,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/auth': 'http://localhost:8000',
-      '/products': 'http://localhost:8000',
-      '/warehouses': 'http://localhost:8000',
-      '/stock_movements': 'http://localhost:8000',
-      '/admin': 'http://localhost:8000'
+      '/auth': 'http://backend:8000',
+      '/products': 'http://backend:8000',
+      '/warehouses': 'http://backend:8000',
+      '/stock_movements': 'http://backend:8000',
+      '/admin': 'http://backend:8000'
     }
   }
 })

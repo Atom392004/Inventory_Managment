@@ -13,3 +13,5 @@ python-dotenv
 bcrypt<4.0
 pytest
 httpx
+requests
+beautifulsoup4

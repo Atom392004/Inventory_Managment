@@ -15,6 +15,7 @@ function Nav({onLogout}){
           <Link to="/products">Products</Link>
           <Link to="/warehouses">Warehouses</Link>
           <Link to="/stock-movements">Stock Movements</Link>
+          <Link to="/scraped-products">Scraped Products</Link>
           {isAdmin && <Link to="/admin">Admin</Link>}
         </nav>
       </div>

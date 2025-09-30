@@ -40,3 +40,8 @@ from .assignment_schemas import (
     UserWarehouseAssignmentCreate,
     UserWarehouseAssignmentInDB,
 )
+
+from .scraped_product_schemas import (
+    ScrapedProductBase,
+    ScrapedProductInDB,
+)
