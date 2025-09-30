@@ -5,7 +5,8 @@ def test_register_success(client, db):
     response = client.post("/auth/register", json={
         "username": "testuser",
         "email": "test@example.com",
-        "password": "Password1!"
+        "password": "Password1!",
+        "role": "user"
     })
     assert response.status_code == 201
     data = response.json()
@@ -17,13 +18,15 @@ def test_register_duplicate_username(client, db):
     client.post("/auth/register", json={
         "username": "testuser",
         "email": "test@example.com",
-        "password": "Password1!"
+        "password": "Password1!",
+        "role": "user"
     })
     # Try duplicate username
     response = client.post("/auth/register", json={
         "username": "testuser",
         "email": "test2@example.com",
-        "password": "Password2!"
+        "password": "Password2!",
+        "role": "user"
     })
     assert response.status_code == 400
     assert "Username already exists" in response.json()["detail"]
@@ -33,13 +36,15 @@ def test_register_duplicate_email(client, db):
     client.post("/auth/register", json={
         "username": "testuser",
         "email": "test@example.com",
-        "password": "Password1!"
+        "password": "Password1!",
+        "role": "user"
     })
     # Try duplicate email
     response = client.post("/auth/register", json={
         "username": "testuser2",
         "email": "test@example.com",
-        "password": "Password2!"
+        "password": "Password2!",
+        "role": "user"
     })
     assert response.status_code == 400
     assert "Email already exists" in response.json()["detail"]
@@ -57,7 +62,8 @@ def test_login_success(client, db):
     client.post("/auth/register", json={
         "username": "testuser",
         "email": "test@example.com",
-        "password": "Password1!"
+        "password": "Password1!",
+        "role": "user"
     })
     # Login
     response = client.post("/auth/login", data={
@@ -74,7 +80,8 @@ def test_login_wrong_password(client, db):
     client.post("/auth/register", json={
         "username": "testuser",
         "email": "test@example.com",
-        "password": "Password1!"
+        "password": "Password1!",
+        "role": "user"
     })
     # Login with wrong password
     response = client.post("/auth/login", data={
@@ -89,7 +96,8 @@ def test_get_me_authenticated(client, db):
     client.post("/auth/register", json={
         "username": "testuser",
         "email": "test@example.com",
-        "password": "Password1!"
+        "password": "Password1!",
+        "role": "user"
     })
     login_response = client.post("/auth/login", data={
         "username": "testuser",

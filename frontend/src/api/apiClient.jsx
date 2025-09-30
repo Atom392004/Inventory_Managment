@@ -112,7 +112,7 @@ export const auth = {
     }
   },
 
-  register: async ({ username, email, password }) => {
+  register: async ({ username, email, password, role }) => {
     try {
       // First check if the server is available
       try {
@@ -121,11 +121,11 @@ export const auth = {
         throw new Error('Server is not responding. Please make sure the backend is running.');
       }
 
-      console.log('Attempting registration for:', { username, email });
-      const response = await api.post('/auth/register', 
-        JSON.stringify({ username, email, password }), 
+      console.log('Attempting registration for:', { username, email, role });
+      const response = await api.post('/auth/register',
+        JSON.stringify({ username, email, password, role }),
         {
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           }
@@ -193,7 +193,7 @@ export const stockMovements = {
 
   transfer: async (data, token) => {
     try {
-      const response = await api.post('/stock-transfers', data, {
+      const response = await api.post('/stock-movements/transfers', data, {
         headers: { ...authHeader(token), 'Content-Type': 'application/json' }
       });
       return response.data;
@@ -302,6 +302,15 @@ export const warehouses = {
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to fetch warehouse details');
     }
+  },
+
+  toggleAvailability: async (id, token) => {
+    try {
+      const response = await api.patch(`/warehouses/${id}/availability`, {}, { headers: authHeader(token) });
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to toggle warehouse availability');
+    }
   }
 };
 
@@ -312,6 +321,15 @@ export const dashboard = {
       return response.data;
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to fetch dashboard stats');
+    }
+  },
+
+  userAnalytics: async (token) => {
+    try {
+      const response = await api.get('/dashboard/user-analytics', { headers: authHeader(token) });
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to fetch user analytics');
     }
   }
 };

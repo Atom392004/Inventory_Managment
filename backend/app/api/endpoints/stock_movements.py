@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_, select
 import uuid
 
 from app import models, schemas
@@ -31,7 +31,7 @@ def record_stock_movement(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found or is inactive.")
 
-    if not current_user.is_admin and product.owner_id != current_user.id:
+    if current_user.role != "admin" and product.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     warehouse = db.query(models.Warehouse).filter(
@@ -39,6 +39,17 @@ def record_stock_movement(
     ).first()
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found.")
+
+    if movement.movement_type == "in" and not warehouse.is_available:
+        raise HTTPException(status_code=400, detail="Cannot stock in to an unavailable warehouse.")
+
+    if current_user.role == "admin":
+        pass
+    elif current_user.role == "warehouse_owner" and warehouse.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    elif current_user.role == "user":
+        # Allow normal users to record stock movements
+        pass
 
     # Adjust quantity based on movement_type
     if movement.movement_type == "out":
@@ -86,13 +97,34 @@ def record_stock_transfer(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found or is inactive.")
 
-    if not current_user.is_admin and product.owner_id != current_user.id:
+    if current_user.role != "admin" and product.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     from_wh = db.query(models.Warehouse).filter(models.Warehouse.id == transfer.from_warehouse_id).first()
     to_wh = db.query(models.Warehouse).filter(models.Warehouse.id == transfer.to_warehouse_id).first()
     if not from_wh or not to_wh:
         raise HTTPException(status_code=404, detail="One or both warehouses not found.")
+
+    if not to_wh.is_available:
+        raise HTTPException(status_code=400, detail="Cannot transfer to an unavailable warehouse.")
+
+    # Check access for from_warehouse
+    if current_user.role == "admin":
+        pass
+    elif current_user.role == "warehouse_owner" and from_wh.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    elif current_user.role == "user":
+        # Allow normal users to record stock transfers
+        pass
+
+    # Check access for to_warehouse
+    if current_user.role == "admin":
+        pass
+    elif current_user.role == "warehouse_owner" and to_wh.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    elif current_user.role == "user":
+        # Allow normal users to record stock transfers
+        pass
 
     # Validate stock in from_warehouse
     current_stock = get_current_stock(db, transfer.product_id, transfer.from_warehouse_id)
@@ -148,12 +180,25 @@ def get_product_stock_distribution(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found or is inactive.")
 
-    if not current_user.is_admin and product.owner_id != current_user.id:
+    if current_user.role != "admin" and product.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    # Get stock for all warehouses
+    # Get accessible warehouses
+    if current_user.role == "admin":
+        warehouses = db.query(models.Warehouse).all()
+    elif current_user.role == "warehouse_owner":
+        warehouses = db.query(models.Warehouse).filter(models.Warehouse.owner_id == current_user.id).all()
+    else:  # USER
+        assigned_warehouse_ids = select(models.UserWarehouseAssignment.warehouse_id).where(models.UserWarehouseAssignment.user_id == current_user.id)
+        warehouses = db.query(models.Warehouse).filter(
+            or_(
+                models.Warehouse.location == current_user.location,
+                models.Warehouse.id.in_(assigned_warehouse_ids)
+            )
+        ).all()
+
+    # Get stock for accessible warehouses
     stock_distribution = {}
-    warehouses = db.query(models.Warehouse).all()
     for warehouse in warehouses:
         current_stock = get_current_stock(db, product_id, warehouse.id)
         if current_stock > 0:
@@ -170,7 +215,7 @@ def get_product_stock_distribution(
 
 
 # --- Get all stock movements ---
-@router.get("/", response_model=list[schemas.StockMovementInDB])
+@router.get("/")
 def list_stock_movements(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
@@ -178,9 +223,20 @@ def list_stock_movements(
     product_id: int = Query(None),
     movement_type: str = Query(None)
 ):
-    query = db.query(models.StockMovement).join(models.Product)
-    if not current_user.is_admin:
-        query = query.filter(models.Product.owner_id == current_user.id)
+    query = db.query(
+        models.StockMovement,
+        models.User.username.label("username")
+    ).select_from(models.StockMovement).join(models.Product, models.StockMovement.product_id == models.Product.id).outerjoin(models.User, models.StockMovement.user_id == models.User.id)
+
+    if current_user.role == "admin":
+        pass
+    elif current_user.role == "warehouse_owner":
+        # Warehouse owners see movements to their warehouses
+        warehouse_ids = select(models.Warehouse.id).where(models.Warehouse.owner_id == current_user.id)
+        query = query.filter(models.StockMovement.warehouse_id.in_(warehouse_ids))
+    else:  # USER
+        # Normal users see movements they created
+        query = query.filter(models.StockMovement.user_id == current_user.id)
 
     if warehouse_id:
         query = query.filter(models.StockMovement.warehouse_id == warehouse_id)
@@ -189,5 +245,12 @@ def list_stock_movements(
     if movement_type:
         query = query.filter(models.StockMovement.movement_type == movement_type)
 
-    movements = query.order_by(models.StockMovement.created_at.desc()).all()
-    return movements
+    movements_with_users = query.order_by(models.StockMovement.created_at.desc()).all()
+
+    results = []
+    for movement, username in movements_with_users:
+        movement_dict = schemas.StockMovementInDB.model_validate(movement).model_dump()
+        movement_dict["username"] = username or "Unknown"
+        results.append(movement_dict)
+
+    return results

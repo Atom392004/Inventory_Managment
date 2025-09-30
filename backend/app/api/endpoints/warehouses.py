@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case, or_
+from sqlalchemy import func, case, or_, select
 from typing import List
 
 from app import models, schemas
@@ -11,11 +11,14 @@ router = APIRouter()
 
 @router.post("", response_model=schemas.WarehouseInDB, status_code=201)
 def create_warehouse(payload: schemas.WarehouseCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    existing = db.query(models.Warehouse).filter(models.Warehouse.name == payload.name, models.Warehouse.owner_id == current_user.id).first()
+    if current_user.role not in ["admin", "warehouse_owner"]:
+        raise HTTPException(status_code=403, detail="Only admins and warehouse owners can create warehouses")
+
+    existing = db.query(models.Warehouse).filter(models.Warehouse.name == payload.name).first()
     if existing:
         raise HTTPException(status_code=400, detail="Warehouse name already exists")
 
-    wh = models.Warehouse(name=payload.name, location=payload.location, owner_id=current_user.id)
+    wh = models.Warehouse(name=payload.name, location=payload.location, is_available=payload.is_available, latitude=payload.latitude, longitude=payload.longitude, owner_id=current_user.id)
     db.add(wh)
     db.commit()
     db.refresh(wh)
@@ -43,12 +46,12 @@ def list_warehouses(db: Session = Depends(get_db), page: int = Query(1, ge=1), p
         models.Product, stock_subq.c.product_id == models.Product.id
     )
 
-    if not current_user.is_admin:
+    if current_user.role == "user":
+        # Normal users see all warehouses
         warehouses_query = warehouses_query.filter(
-            models.Warehouse.owner_id == current_user.id,
-            or_(models.Product.id.is_(None), models.Product.owner_id == current_user.id)
+            or_(models.Product.id.is_(None), models.Product.is_active == True)
         )
-    else:
+    else:  # admin and warehouse_owner see all warehouses
         warehouses_query = warehouses_query.filter(
             or_(models.Product.id.is_(None), models.Product.is_active == True)
         )
@@ -72,8 +75,17 @@ def get_warehouse(warehouse_id: int, db: Session = Depends(get_db), current_user
     wh = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
     if not wh:
         raise HTTPException(status_code=404, detail="Warehouse not found")
-    if not current_user.is_admin and wh.owner_id != current_user.id:
+    if current_user.role == "admin":
+        pass
+    elif current_user.role == "warehouse_owner" and wh.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
+    elif current_user.role == "user":
+        assigned = db.query(models.UserWarehouseAssignment).filter(
+            models.UserWarehouseAssignment.user_id == current_user.id,
+            models.UserWarehouseAssignment.warehouse_id == warehouse_id
+        ).first()
+        if wh.location != current_user.location and not assigned:
+            raise HTTPException(status_code=403, detail="Forbidden")
     return wh
 
 @router.put("/{warehouse_id}", response_model=schemas.WarehouseInDB)
@@ -81,14 +93,21 @@ def update_warehouse(warehouse_id: int, payload: schemas.WarehouseCreate, db: Se
     wh = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
     if not wh:
         raise HTTPException(status_code=404, detail="Warehouse not found")
-    if not current_user.is_admin and wh.owner_id != current_user.id:
+    if current_user.role == "admin":
+        pass
+    elif current_user.role == "warehouse_owner" and wh.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    else:
         raise HTTPException(status_code=403, detail="Forbidden")
     # unique name constraint
-    conflict = db.query(models.Warehouse).filter(models.Warehouse.name == payload.name, models.Warehouse.id != warehouse_id, models.Warehouse.owner_id == current_user.id).first()
+    conflict = db.query(models.Warehouse).filter(models.Warehouse.name == payload.name, models.Warehouse.id != warehouse_id).first()
     if conflict:
         raise HTTPException(status_code=400, detail="Warehouse name already exists")
     wh.name = payload.name
     wh.location = payload.location
+    wh.is_available = payload.is_available
+    wh.latitude = payload.latitude
+    wh.longitude = payload.longitude
     db.commit()
     db.refresh(wh)
     return wh
@@ -98,11 +117,46 @@ def delete_warehouse(warehouse_id: int, db: Session = Depends(get_db), current_u
     wh = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
     if not wh:
         raise HTTPException(status_code=404, detail="Warehouse not found")
-    if not current_user.is_admin and wh.owner_id != current_user.id:
+    if current_user.role == "admin":
+        pass
+    elif current_user.role == "warehouse_owner" and wh.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    else:
         raise HTTPException(status_code=403, detail="Forbidden")
     db.delete(wh)
     db.commit()
     return
+
+@router.patch("/{warehouse_id}/availability", response_model=schemas.WarehouseInDB)
+def toggle_warehouse_availability(warehouse_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    wh = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
+    if not wh:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    if current_user.role == "admin":
+        pass
+    elif current_user.role == "warehouse_owner" and wh.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    else:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Check if trying to set to unavailable and warehouse has stock
+    new_available = not wh.is_available
+    if not new_available:  # Trying to set to False (unavailable)
+        # Check if has stock: any product with net stock > 0
+        has_stock = db.query(
+            db.query(models.StockMovement).filter(
+                models.StockMovement.warehouse_id == warehouse_id
+            ).group_by(models.StockMovement.product_id).having(
+                func.sum(models.StockMovement.quantity) > 0
+            ).exists()
+        ).scalar()
+        if has_stock:
+            raise HTTPException(status_code=400, detail="Cannot make warehouse unavailable while it has stock")
+
+    wh.is_available = not wh.is_available
+    db.commit()
+    db.refresh(wh)
+    return wh
 
 @router.get("/{warehouse_id}/details", response_model=schemas.WarehouseDetails)
 def get_warehouse_details(
@@ -113,8 +167,17 @@ def get_warehouse_details(
     wh = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
     if not wh:
         raise HTTPException(status_code=404, detail="Warehouse not found")
-    if not current_user.is_admin and wh.owner_id != current_user.id:
+    if current_user.role == "admin":
+        pass
+    elif current_user.role == "warehouse_owner" and wh.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
+    elif current_user.role == "user":
+        assigned = db.query(models.UserWarehouseAssignment).filter(
+            models.UserWarehouseAssignment.user_id == current_user.id,
+            models.UserWarehouseAssignment.warehouse_id == warehouse_id
+        ).first()
+        if wh.location != current_user.location and not assigned:
+            raise HTTPException(status_code=403, detail="Forbidden")
 
     # Products in stock > 0 for this warehouse using subquery
     stock_subq = db.query(
@@ -139,7 +202,7 @@ def get_warehouse_details(
         func.coalesce(stock_subq.c.stock, 0) > 0
     )
 
-    if not current_user.is_admin:
+    if current_user.role == "user":
         products_in_stock = products_in_stock.filter(models.Product.owner_id == current_user.id)
 
     products_in_stock = products_in_stock.order_by(models.Product.name).all()
@@ -168,7 +231,7 @@ def get_warehouse_details(
         models.Product.is_active == True
     )
 
-    if not current_user.is_admin:
+    if current_user.role == "user":
         recent_movements_query = recent_movements_query.filter(
             models.Product.owner_id == current_user.id
         )

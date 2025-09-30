@@ -235,10 +235,11 @@ export const products = {
 
 // --- Warehouses ---
 export const warehouses = {
-  list: async (token) => {
+  list: async (token, params = {}) => {
     try {
       const response = await api.get("/warehouses", {
         headers: authHeader(token),
+        params,
       });
       return response.data;
     } catch (error) {
@@ -282,6 +283,18 @@ export const warehouses = {
       throw error;
     }
   },
+
+  details: async (id, token) => {
+    try {
+      const response = await api.get(`/warehouses/${id}/details`, {
+        headers: authHeader(token),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch warehouse details:", error.response?.data || error.message);
+      throw error;
+    }
+  },
 };
 
 // --- Dashboard ---
@@ -294,6 +307,108 @@ export const dashboard = {
       return response.data;
     } catch (error) {
       console.error("Failed to fetch dashboard stats:", error.response?.data || error.message);
+      throw error;
+    }
+  },
+};
+
+// --- Assignments ---
+export const assignments = {
+  assign: async (data, token) => {
+    try {
+      const response = await api.post("/assignments", data, {
+        headers: { ...authHeader(token), "Content-Type": "application/json" },
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to assign user to warehouse:", error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  listForWarehouse: async (warehouseId, token) => {
+    try {
+      const response = await api.get(`/assignments/warehouse/${warehouseId}`, {
+        headers: authHeader(token),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch assignments for warehouse:", error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  remove: async (assignmentId, token) => {
+    try {
+      const response = await api.delete(`/assignments/${assignmentId}`, {
+        headers: authHeader(token),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to remove assignment:", error.response?.data || error.message);
+      throw error;
+    }
+  },
+};
+
+// --- Admin ---
+export const admin = {
+  listUsers: async (token) => {
+    try {
+      const response = await api.get("/admin/users", {
+        headers: authHeader(token),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch users:", error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  toggleRole: async (userId, token) => {
+    try {
+      const response = await api.post(`/admin/users/${userId}/toggle_role`, {}, {
+        headers: authHeader(token),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to toggle role:", error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  updateUser: async (userId, data, token) => {
+    try {
+      const response = await api.put(`/admin/users/${userId}`, data, {
+        headers: { ...authHeader(token), "Content-Type": "application/json" },
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to update user:", error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  globalAnalytics: async (token) => {
+    try {
+      const response = await api.get("/admin/analytics/global", {
+        headers: authHeader(token),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch global analytics:", error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  warehouseUsers: async (warehouseId, token) => {
+    try {
+      const response = await api.get(`/admin/warehouses/${warehouseId}/users`, {
+        headers: authHeader(token),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch warehouse users:", error.response?.data || error.message);
       throw error;
     }
   },

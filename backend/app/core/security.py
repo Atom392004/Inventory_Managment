@@ -19,10 +19,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
-def create_access_token(subject: str, expires_delta: Optional[timedelta] = None):
+def create_access_token(subject: str, expires_delta: Optional[timedelta] = None, role: Optional[str] = None):
     to_encode = {"sub": str(subject)}
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
+    if role:
+        to_encode.update({"role": role})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def decode_access_token(token: str):

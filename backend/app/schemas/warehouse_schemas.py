@@ -6,12 +6,19 @@ from datetime import datetime
 class WarehouseBase(BaseModel):
     name: str
     location: Optional[str] = None
+    is_available: Optional[bool] = True
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 class WarehouseCreate(WarehouseBase):
     pass
 
-class WarehouseInDB(WarehouseBase):
+class WarehouseInDB(BaseModel):
     id: int
+    name: str
+    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     created_at: Optional[datetime]
     owner_id: Optional[int]
     product_count: Optional[int] = 0

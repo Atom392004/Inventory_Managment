@@ -48,7 +48,8 @@ def auth_client(client, db):
     client.post("/auth/register", json={
         "username": "testuser",
         "email": "test@example.com",
-        "password": "Password1!"
+        "password": "Password1!",
+        "role": "admin"
     })
     login_response = client.post("/auth/login", data={
         "username": "testuser",

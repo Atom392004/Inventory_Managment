@@ -12,7 +12,7 @@ export default function ProfilePage() {
   const [stats, setStats] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [changePasswordMode, setChangePasswordMode] = useState(false);
-  const [formData, setFormData] = useState({ username: "", email: "" });
+  const [formData, setFormData] = useState({ username: "", email: "", location: "" });
   const [passwordData, setPasswordData] = useState({ old_password: "", new_password: "" });
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateError, setUpdateError] = useState("");
@@ -32,7 +32,7 @@ export default function ProfilePage() {
         ]);
         setProfile(profileData);
         setStats(statsData);
-        setFormData({ username: profileData.username, email: profileData.email });
+        setFormData({ username: profileData.username, email: profileData.email, location: profileData.location || "" });
       } catch (err) {
         setError(err.message || "Failed to load profile");
       } finally {
@@ -153,135 +153,161 @@ export default function ProfilePage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Profile Card */}
-      <Card className="p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">User Profile</h1>
-          <div className="space-x-2">
-            <Button onClick={() => setEditMode(!editMode)} variant="outline">
-              {editMode ? "Cancel Edit" : "Edit Profile"}
-            </Button>
-            <Button onClick={handleLogout} variant="outline" className="text-red-600">
-              Logout
-            </Button>
+      <Card>
+        <Card.Header>
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-bold text-gray-800">User Profile</h1>
+            <div className="space-x-2">
+              <Button onClick={() => setEditMode(!editMode)} variant="outline">
+                {editMode ? "Cancel Edit" : "Edit Profile"}
+              </Button>
+              <Button onClick={handleLogout} variant="outline" className="text-red-600">
+                Logout
+              </Button>
+            </div>
           </div>
-        </div>
-
-        {profile ? (
-          <div className="space-y-4">
-            {editMode ? (
-              <form onSubmit={handleUpdateProfile} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                  <input
-                    type="text"
-                    value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                {updateError && <p className="text-red-600 text-sm">{updateError}</p>}
-                <Button type="submit" disabled={updateLoading}>
-                  {updateLoading ? "Updating..." : "Update Profile"}
-                </Button>
-              </form>
-            ) : (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                  <p className="text-lg text-gray-900">{profile.username}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <p className="text-lg text-gray-900">{profile.email}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                  <p className={`text-lg ${profile.is_admin ? 'text-green-600' : 'text-gray-900'}`}>
-                    {profile.is_admin ? "Admin" : "User"}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Joined</label>
-                  <p className="text-lg text-gray-900">
-                    {new Date(profile.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-              </>
-            )}
-          </div>
-        ) : (
-          <p className="text-gray-500">No profile data available.</p>
-        )}
+        </Card.Header>
+        <Card.Body>
+          {profile ? (
+            <div className="space-y-4">
+              {editMode ? (
+                <form onSubmit={handleUpdateProfile} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input
+                      type="text"
+                      value={formData.username}
+                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                    <input
+                      type="text"
+                      value={formData.location}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  {updateError && <p className="text-red-600 text-sm">{updateError}</p>}
+                  <Button type="submit" disabled={updateLoading}>
+                    {updateLoading ? "Updating..." : "Update Profile"}
+                  </Button>
+                </form>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <p className="text-lg text-gray-900">{profile.username}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <p className="text-lg text-gray-900">{profile.email}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                    <p className="text-lg text-gray-900">
+                      {profile.role === 'ADMIN' ? 'Admin' : profile.role === 'WAREHOUSE_OWNER' ? 'Warehouse Owner' : 'User'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                    <p className="text-lg text-gray-900">{profile.location || "Not set"}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Joined</label>
+                    <p className="text-lg text-gray-900">
+                      {new Date(profile.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <p className="text-gray-500">No profile data available.</p>
+          )}
+        </Card.Body>
       </Card>
 
       {/* Change Password Card */}
-      <Card className="p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-800">Change Password</h2>
-          <Button onClick={() => setChangePasswordMode(!changePasswordMode)} variant="outline">
-            {changePasswordMode ? "Cancel" : "Change Password"}
-          </Button>
-        </div>
+      <Card>
+        <Card.Header>
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold text-gray-800">Change Password</h2>
+            <Button onClick={() => setChangePasswordMode(!changePasswordMode)} variant="outline">
+              {changePasswordMode ? "Cancel" : "Change Password"}
+            </Button>
+          </div>
+        </Card.Header>
 
         {changePasswordMode && (
-          <form onSubmit={handleChangePassword} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-              <input
-                type="password"
-                value={passwordData.old_password}
-                onChange={(e) => setPasswordData({ ...passwordData, old_password: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-              <input
-                type="password"
-                value={passwordData.new_password}
-                onChange={(e) => setPasswordData({ ...passwordData, new_password: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            {updateError && <p className="text-red-600 text-sm">{updateError}</p>}
-            <Button type="submit" disabled={updateLoading}>
-              {updateLoading ? "Changing..." : "Change Password"}
-            </Button>
-          </form>
+          <Card.Body>
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                <input
+                  type="password"
+                  value={passwordData.old_password}
+                  onChange={(e) => setPasswordData({ ...passwordData, old_password: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={passwordData.new_password}
+                  onChange={(e) => setPasswordData({ ...passwordData, new_password: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              {updateError && <p className="text-red-600 text-sm">{updateError}</p>}
+              <Button type="submit" disabled={updateLoading}>
+                {updateLoading ? "Changing..." : "Change Password"}
+              </Button>
+            </form>
+          </Card.Body>
         )}
       </Card>
 
       {/* Statistics Card */}
       {stats && (
-        <Card className="p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-6">Your Statistics</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600">{stats.total_products}</div>
-              <div className="text-sm text-gray-600">Total Products</div>
+        <Card>
+          <Card.Header>
+            <h2 className="text-xl font-bold text-gray-800">Your Statistics</h2>
+          </Card.Header>
+          <Card.Body>
+            <div className={`grid grid-cols-1 ${user?.role !== 'user' ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-blue-600">{stats.total_products}</div>
+                <div className="text-sm text-gray-600">Total Products</div>
+              </div>
+              {user?.role !== 'user' && (
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-green-600">{stats.total_warehouses}</div>
+                  <div className="text-sm text-gray-600">Total Warehouses</div>
+                </div>
+              )}
+              <div className="text-center">
+                <div className="text-3xl font-bold text-purple-600">{stats.total_stock}</div>
+                <div className="text-sm text-gray-600">Total Stock</div>
+              </div>
             </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-green-600">{stats.total_warehouses}</div>
-              <div className="text-sm text-gray-600">Total Warehouses</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-purple-600">{stats.total_stock}</div>
-              <div className="text-sm text-gray-600">Total Stock</div>
-            </div>
-          </div>
+          </Card.Body>
         </Card>
       )}
     </div>

@@ -43,7 +43,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 def get_current_admin(current_user: models.User = Depends(get_current_user)):
     """Ensures the current user is an admin."""
-    if not current_user.is_admin:
+    if current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only")
     return current_user
 
@@ -67,7 +67,8 @@ def register(payload: schemas.UserCreate, db: Session = Depends(get_db)):
             username=payload.username,
             email=payload.email,
             hashed_password=hashed,
-            is_admin=False
+            role=payload.role,
+            location=payload.location
         )
         
         # Add to database and commit
@@ -105,7 +106,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
         token = security.create_access_token(
             subject=str(user.id),
-            expires_delta=timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES)
+            expires_delta=timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES),
+            role=user.role
         )
         return {"access_token": token, "token_type": "bearer"}
     except HTTPException as e:
@@ -153,6 +155,12 @@ def update_me(payload: schemas.UserUpdate, db: Session = Depends(get_db), curren
             current_user.username = payload.username
         if payload.email:
             current_user.email = payload.email
+        if payload.location is not None:
+            current_user.location = payload.location
+        if payload.role is not None:
+            if current_user.role != "admin":
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can change roles")
+            current_user.role = payload.role
 
         db.commit()
         db.refresh(current_user)

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { dashboard, stockMovements } from "../api/apiClient.jsx";
 import { useAuth } from "../state/auth";
 import { Package, Warehouse, ArrowLeftRight, AlertCircle, BarChart3, TrendingUp } from "lucide-react";
+import { Card } from "../components/ui/Card.tsx";
 import {
   LineChart,
   Line,
@@ -17,6 +19,7 @@ import {
 
 export default function DashboardPage() {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({ products: 0, warehouses: 0, movements: 0, total_stock: 0, low_stock_items: 0 });
   const [recentMovements, setRecentMovements] = useState([]);
   const [lowStockProducts, setLowStockProducts] = useState([]);
@@ -163,15 +166,17 @@ function timeAgo(dateString) {
       {/* Low Stock Alerts and Recent Movements */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Low Stock Alerts */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
+        <Card>
+          <Card.Header>
+            <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-lg font-semibold text-gray-800">Low Stock Alert</h2>
                 <p className="text-sm text-gray-600">Products that need restocking attention</p>
               </div>
-              <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">View All</button>
+              <button onClick={() => navigate('/products')} className="text-blue-600 hover:text-blue-700 text-sm font-medium">View All</button>
             </div>
+          </Card.Header>
+          <Card.Body>
             <ul className="space-y-4">
               {lowStockProducts.slice(0, 3).map((p) => (
                 <li key={p.id} className="flex justify-between items-center">
@@ -181,7 +186,7 @@ function timeAgo(dateString) {
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="text-red-600 text-sm font-medium">{p.current_stock} left</span>
-                    <button className="text-sm bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700">
+                    <button onClick={() => navigate('/stock-movements')} className="text-sm bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700">
                       Restock
                     </button>
                   </div>
@@ -191,19 +196,21 @@ function timeAgo(dateString) {
                 <p className="text-gray-500 text-sm">No low stock items.</p>
               )}
             </ul>
-          </div>
-        </div>
+          </Card.Body>
+        </Card>
 
         {/* Recent Stock Movements */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
+        <Card>
+          <Card.Header>
+            <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-lg font-semibold text-gray-800">Recent Stock Movements</h2>
                 <p className="text-sm text-gray-600">Latest inventory activities</p>
               </div>
-              <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">View All</button>
+              <button onClick={() => navigate('/stock-movements')} className="text-blue-600 hover:text-blue-700 text-sm font-medium">View All</button>
             </div>
+          </Card.Header>
+          <Card.Body>
             <ul className="space-y-4">
               {recentMovements.slice(0, 4).map((m, index) => {
                 const isIn = m.movement_type === "in" || m.movement_type === "transfer_in";
@@ -236,19 +243,21 @@ function timeAgo(dateString) {
                 <p className="text-gray-500 text-sm">No recent movements.</p>
               )}
             </ul>
-          </div>
-        </div>
+          </Card.Body>
+        </Card>
       </div>
 
       {/* Analytics Section with Graphs */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Stock Movements Trend Line Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-6">
-            <div className="flex items-center gap-3 mb-4">
+        <Card>
+          <Card.Header>
+            <div className="flex items-center gap-3">
               <TrendingUp className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-800">Stock Movements Trend</h2>
             </div>
+          </Card.Header>
+          <Card.Body>
             {stockMovementsTrend.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={stockMovementsTrend}>
@@ -263,16 +272,18 @@ function timeAgo(dateString) {
             ) : (
               <p className="text-gray-500 text-sm">No trend data available.</p>
             )}
-          </div>
-        </div>
+          </Card.Body>
+        </Card>
 
         {/* Stock by Warehouse Bar Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-6">
-            <div className="flex items-center gap-3 mb-4">
+        <Card>
+          <Card.Header>
+            <div className="flex items-center gap-3">
               <BarChart3 className="w-5 h-5 text-green-600" />
               <h2 className="text-lg font-semibold text-gray-800">Stock by Warehouse</h2>
             </div>
+          </Card.Header>
+          <Card.Body>
             {stockByWarehouse.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={stockByWarehouse}>
@@ -287,8 +298,8 @@ function timeAgo(dateString) {
             ) : (
               <p className="text-gray-500 text-sm">No warehouse data available.</p>
             )}
-          </div>
-        </div>
+          </Card.Body>
+        </Card>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
-Add unique constraint on product name per owner
+"""Add unique constraint on product name per owner
 
 Revision ID: def456789abc
-Revises: 123456789abc
+Revises: sku_unique_per_owner
 Create Date: 2024-10-01 12:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'def456789abc'
-down_revision: Union[str, Sequence[str], None] = '123456789abc'
+down_revision: Union[str, Sequence[str], None] = 'sku_unique_per_owner'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

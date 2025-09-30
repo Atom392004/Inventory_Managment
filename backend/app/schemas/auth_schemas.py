@@ -4,11 +4,26 @@ from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 from datetime import datetime
 import re
+from enum import Enum
+
+class UserRole(Enum):
+    ADMIN = "admin"
+    WAREHOUSE_OWNER = "warehouse_owner"
+    USER = "user"
 
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
+    role: Optional[str] = "user"
+    location: Optional[str] = None
+
+    @field_validator('role')
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        if v not in ["user", "warehouse_owner", "admin"]:
+            raise ValueError('Role must be either "user", "warehouse_owner", or "admin"')
+        return v
 
     @field_validator('password')
     @classmethod
@@ -33,7 +48,8 @@ class User(BaseModel):
     id: int
     username: str
     email: str
-    is_admin: bool
+    role: UserRole
+    location: Optional[str] = None
     created_at: Optional[datetime]
 
     class Config:
@@ -45,6 +61,8 @@ class UserRead(User):
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[EmailStr] = None
+    role: Optional[str] = None
+    location: Optional[str] = None
 
 class ChangePassword(BaseModel):
     old_password: str

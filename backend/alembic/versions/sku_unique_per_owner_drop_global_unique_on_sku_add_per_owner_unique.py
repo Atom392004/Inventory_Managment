@@ -1,6 +1,6 @@
-Drop global unique on sku, add per-owner unique
+"""Drop global unique on sku, add per-owner unique
 
-Revision ID: 123456789abc
+Revision ID: sku_unique_per_owner
 Revises:
 Create Date: 2024-10-01 12:00:00.000000
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '123456789abc'
+revision: str = 'sku_unique_per_owner'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

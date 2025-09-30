@@ -1,6 +1,7 @@
 # Ensures this directory is treated as a Python package for imports.
 
 from .auth_schemas import (
+    UserRole,
     UserCreate,
     UserLogin,
     User,
@@ -32,4 +33,10 @@ from .stock_movement_schemas import (
     StockMovementCreate,
     StockMovementInDB,
     StockTransferCreate,
+)
+
+from .assignment_schemas import (
+    UserWarehouseAssignmentBase,
+    UserWarehouseAssignmentCreate,
+    UserWarehouseAssignmentInDB,
 )

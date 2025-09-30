@@ -3,7 +3,7 @@ from sqlalchemy import text # Add this import to main.py
 from app.database import SessionLocal
 from fastapi import FastAPI
 from app.database import Base, engine, get_db
-from app.api.endpoints import products, warehouses, stock_movements, auth, dashboard
+from app.api.endpoints import products, warehouses, stock_movements, auth, dashboard, admin, assignments
 from sqlalchemy.orm import Session
 from app.core import security
 from app import models
@@ -25,8 +25,8 @@ app = FastAPI(
 )
 
 # Configure CORS with specific origins
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "*")
-origins = [origin.strip() for origin in allowed_origins.split(",")] if allowed_origins != "*" else ["*"]
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+origins = [origin.strip() for origin in allowed_origins.split(",")]
 
 
 app.add_middleware(
@@ -95,7 +95,7 @@ def ensure_admin():
         existing = db.query(models.User).filter(models.User.username == admin_username).first()
         if not existing:
             hashed = security.get_password_hash(admin_password)
-            user = models.User(username=admin_username, email=admin_email, hashed_password=hashed, is_admin=True)
+            user = models.User(username=admin_username, email=admin_email, hashed_password=hashed, role="ADMIN")
             db.add(user)
             db.commit()
             db.refresh(user)
@@ -116,3 +116,5 @@ app.include_router(products.router, prefix="/products", tags=["Products"])
 app.include_router(warehouses.router, prefix="/warehouses", tags=["Warehouses"])
 app.include_router(stock_movements.router, prefix="/stock-movements", tags=["Stock Movements"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+app.include_router(admin.router, prefix="/admin", tags=["Admin"])
+app.include_router(assignments.router, prefix="/assignments", tags=["Assignments"])

@@ -49,24 +49,25 @@ def list_products(
             func.coalesce(func.sum(models.StockMovement.quantity), 0).label("total_stock")
         ).outerjoin(
             models.StockMovement, models.Product.id == models.StockMovement.product_id
-        ).group_by(models.Product.id).subquery()
-
-        count_query = db.query(func.count(subq.c.id)).select_from(subq).filter(subq.c.total_stock <= 10)
+        ).group_by(models.Product.id)
 
         # Apply same filters to subq
         if not include_inactive:
-            count_query = count_query.join(models.Product, models.Product.id == subq.c.id).filter(models.Product.is_active == True)
-        if not current_user.is_admin:
-            count_query = count_query.filter(models.Product.owner_id == current_user.id)
+            subq = subq.filter(models.Product.is_active == True)
+        if current_user.role != "admin":
+            subq = subq.filter(models.Product.owner_id == current_user.id)
         if search:
-            count_query = count_query.filter(or_(
+            subq = subq.filter(or_(
                 models.Product.name.ilike(f"%{search}%"),
                 models.Product.sku.ilike(f"%{search}%")
             ))
         if created_from_date:
-            count_query = count_query.filter(models.Product.created_at >= created_from_date)
+            subq = subq.filter(models.Product.created_at >= created_from_date)
         if created_to_date:
-            count_query = count_query.filter(models.Product.created_at <= created_to_date)
+            subq = subq.filter(models.Product.created_at <= created_to_date)
+
+        subq = subq.subquery()
+        count_query = db.query(func.count(subq.c.id)).select_from(subq).filter(subq.c.total_stock <= 10)
     else:
         count_query = db.query(func.count(models.Product.id))
 
@@ -75,7 +76,7 @@ def list_products(
             count_query = count_query.filter(models.Product.is_active == True)
 
         # non-admin users see only their products
-        if not current_user.is_admin:
+        if current_user.role != "admin":
             count_query = count_query.filter(models.Product.owner_id == current_user.id)
 
         if search:
@@ -104,7 +105,7 @@ def list_products(
         query = query.filter(models.Product.is_active == True)
 
     # non-admin users see only their products
-    if not current_user.is_admin:
+    if current_user.role != "admin":
         query = query.filter(models.Product.owner_id == current_user.id)
 
     if search:
@@ -164,10 +165,10 @@ def get_product_details(id: int = Path(...), db: Session = Depends(get_db), curr
     product = db.query(models.Product).filter(models.Product.id == id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found.")
-    if not current_user.is_admin and product.owner_id != current_user.id:
+    if current_user.role != "admin" and product.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
-    # Calculate stock distribution per warehouse
-    stock_distribution = db.query(
+    # Calculate stock distribution per accessible warehouse
+    stock_query = db.query(
         models.Warehouse.id.label("warehouse_id"),
         models.Warehouse.name.label("warehouse_name"),
         func.coalesce(func.sum(models.StockMovement.quantity), 0).label("stock")
@@ -175,7 +176,22 @@ def get_product_details(id: int = Path(...), db: Session = Depends(get_db), curr
         models.StockMovement, models.Warehouse.id == models.StockMovement.warehouse_id
     ).filter(
         models.StockMovement.product_id == id
-    ).group_by(
+    )
+
+    if current_user.role == "admin":
+        pass
+    elif current_user.role == "warehouse_owner":
+        stock_query = stock_query.filter(models.Warehouse.owner_id == current_user.id)
+    else:  # USER
+        assigned_warehouse_ids = db.query(models.UserWarehouseAssignment.warehouse_id).filter(models.UserWarehouseAssignment.user_id == current_user.id).subquery()
+        stock_query = stock_query.filter(
+            or_(
+                models.Warehouse.location == current_user.location,
+                models.Warehouse.id.in_(assigned_warehouse_ids)
+            )
+        )
+
+    stock_distribution = stock_query.group_by(
         models.Warehouse.id, models.Warehouse.name
     ).all()
 
@@ -201,7 +217,7 @@ def update_product(
     db_product = db.query(models.Product).filter(models.Product.id == id).first()
     if not db_product:
         raise HTTPException(status_code=404, detail="Product not found.")
-    if not current_user.is_admin and db_product.owner_id != current_user.id:
+    if current_user.role != "admin" and db_product.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     # Check for SKU conflict, excluding the current product
@@ -228,7 +244,7 @@ def delete_product(id: int, db: Session = Depends(get_db), current_user: models.
     db_product = db.query(models.Product).filter(models.Product.id == id).first()
     if not db_product:
         raise HTTPException(status_code=404, detail="Product not found.")
-    if not current_user.is_admin and db_product.owner_id != current_user.id:
+    if current_user.role != "admin" and db_product.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
     # Delete associated stock movements first
     db.query(models.StockMovement).filter(models.StockMovement.product_id == id).delete()

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { auth } from "../api/apiClient.jsx";
 
 export default function RegisterPage() {
-  const [form, setForm] = useState({ username: "", email: "", password: "" });
+  const [form, setForm] = useState({ username: "", email: "", password: "", role: "user" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -91,6 +91,36 @@ export default function RegisterPage() {
               placeholder="Choose a secure password"
               required
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Account Type
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="role"
+                  value="user"
+                  checked={form.role === "user"}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}
+                  className="mr-2"
+                />
+                <span className="text-sm text-gray-700">Regular User</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="role"
+                  value="warehouse_owner"
+                  checked={form.role === "warehouse_owner"}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}
+                  className="mr-2"
+                />
+                <span className="text-sm text-gray-700">Warehouse Owner</span>
+              </label>
+            </div>
           </div>
 
           <button
