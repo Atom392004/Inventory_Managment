@@ -1,4 +1,4 @@
-from app.config import settings 
+from app.config import settings
 from sqlalchemy import text # Add this import to main.py
 from app.database import SessionLocal
 from fastapi import FastAPI

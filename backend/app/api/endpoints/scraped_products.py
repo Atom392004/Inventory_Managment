@@ -8,6 +8,7 @@ import time
 
 from app import models, schemas
 from app.database import get_db
+from app.recommendation import get_recommendations
 
 router = APIRouter()
 
@@ -69,3 +70,10 @@ def scrape_and_store_books(db: Session = Depends(get_db)):
 def get_scraped_products(db: Session = Depends(get_db)):
     products = db.query(models.ScrapedProduct).all()
     return products
+
+@router.get("/recommendations/{product_id}", response_model=schemas.RecommendationResponse)
+def recommend_products(product_id: int, db: Session = Depends(get_db)):
+    recommendations = get_recommendations(product_id, db)
+    if not recommendations:
+        raise HTTPException(status_code=404, detail="Product not found or no recommendations available")
+    return {"recommendations": recommendations}

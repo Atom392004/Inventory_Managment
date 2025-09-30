@@ -413,3 +413,5 @@ export const admin = {
     }
   },
 };
+
+export default api;

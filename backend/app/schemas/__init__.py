@@ -44,4 +44,6 @@ from .assignment_schemas import (
 from .scraped_product_schemas import (
     ScrapedProductBase,
     ScrapedProductInDB,
+    RecommendationItem,
+    RecommendationResponse,
 )

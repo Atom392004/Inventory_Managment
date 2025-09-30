@@ -2,7 +2,7 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException, status
-from app.config import settings
+from .config import settings
 import logging
 
 # Configure logging

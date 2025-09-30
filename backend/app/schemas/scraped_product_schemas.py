@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class ScrapedProductBase(BaseModel):
@@ -17,3 +17,10 @@ class ScrapedProductInDB(ScrapedProductBase):
 
     class Config:
         from_attributes = True
+
+class RecommendationItem(BaseModel):
+    product: ScrapedProductInDB
+    similarity_score: float
+
+class RecommendationResponse(BaseModel):
+    recommendations: List[RecommendationItem]

@@ -5,9 +5,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from datetime import timedelta
 import logging
 
-from app import models, schemas
-from app.database import get_db
-from app.core import security
+from ... import models, schemas
+from ...database import get_db
+from ...core import security
 
 # Configure logging
 logger = logging.getLogger(__name__)
