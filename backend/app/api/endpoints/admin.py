@@ -7,12 +7,12 @@ from app.auth.admin_dependencies import get_current_admin_user
 
 router = APIRouter()
 
-@router.get("/admin/users", response_model=list[schemas.User])
+@router.get("/users", response_model=list[schemas.User])
 def list_users(db: Session = Depends(get_db), admin = Depends(get_current_admin_user)):
     users = db.query(models.User).all()
     return users
 
-@router.post("/admin/users/{user_id}/toggle_role")
+@router.post("/users/{user_id}/toggle_role")
 def toggle_role(user_id: int, db: Session = Depends(get_db), admin = Depends(get_current_admin_user)):
     user = db.query(models.User).filter(models.User.id==user_id).first()
     if not user:
@@ -27,7 +27,7 @@ def toggle_role(user_id: int, db: Session = Depends(get_db), admin = Depends(get
     db.commit()
     return {"id": user.id, "role": user.role}
 
-@router.put("/admin/users/{user_id}")
+@router.put("/users/{user_id}")
 def update_user(user_id: int, payload: schemas.UserUpdate, db: Session = Depends(get_db), admin = Depends(get_current_admin_user)):
     user = db.query(models.User).filter(models.User.id==user_id).first()
     if not user:
@@ -51,7 +51,7 @@ def update_user(user_id: int, payload: schemas.UserUpdate, db: Session = Depends
     db.commit()
     return {"id": user.id, "username": user.username, "email": user.email, "role": user.role, "location": user.location}
 
-@router.get("/admin/analytics/global")
+@router.get("/analytics/global")
 def global_analytics(db: Session = Depends(get_db), admin = Depends(get_current_admin_user)):
     # Total users, warehouses, products, stock movements
     total_users = db.query(func.count(models.User.id)).scalar()
@@ -70,7 +70,7 @@ def global_analytics(db: Session = Depends(get_db), admin = Depends(get_current_
         "total_value": float(total_value)
     }
 
-@router.get("/admin/warehouses/{warehouse_id}/users")
+@router.get("/warehouses/{warehouse_id}/users")
 def get_warehouse_user_usage(warehouse_id: int, db: Session = Depends(get_db), admin = Depends(get_current_admin_user)):
     warehouse = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
     if not warehouse:

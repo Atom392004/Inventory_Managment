@@ -9,6 +9,7 @@ import WarehousesPage from "./pages/WarehousesPage";
 import StockMovementsPage from "./pages/StockMovementsPage";
 import ScrapedProductsPage from "./pages/ScrapedProductsPage";
 import ProfilePage from "./pages/ProfilePage";
+import AnalyticsPage from "./pages/AnalyticsPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import { AuthProvider, useAuth } from "./state/auth";
 import RegisterPage from "./pages/RegisterPage";
@@ -36,6 +37,7 @@ export default function App(){
           <Route path="warehouses" element={<WarehousesPage />} />
           <Route path="stock-movements" element={<StockMovementsPage />} />
           <Route path="scraped-products" element={<ScrapedProductsPage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />

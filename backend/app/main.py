@@ -77,8 +77,7 @@ async def health_check():
 
 
 
-# create tables
-Base.metadata.create_all(bind=engine)
+
 
 # ensure admin exists from env vars
 def ensure_admin():
