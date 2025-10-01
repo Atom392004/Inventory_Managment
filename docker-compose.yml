@@ -1,15 +1,17 @@
 # version field removed as it is obsolete
 services:
   backend:
-    build: ./backend/app
+    build:
+      context: ./backend
+      dockerfile: app/Dockerfile
     env_file:
       - ./.env
     environment:
       - DATABASE_URL=postgresql://postgres:QC%402025@host.docker.internal:5432/Inventory_mang
       - API_SECRET_KEY=your-super-secret-key-change-this-in-production
-      - PYTHONPATH=/
+      - PYTHONPATH=/app
     volumes:
-      - ./backend/app:/app
+      - ./backend/app:/app/app
     ports:
       - "3002:3002"
     command: >

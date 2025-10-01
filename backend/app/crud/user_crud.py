@@ -3,7 +3,7 @@
 from sqlalchemy.orm import Session
 from app.models import User
 from app.schemas.auth_schemas import UserCreate
-from app.auth.auth_handler import get_password_hash, verify_password
+from app.core.security import get_password_hash, verify_password
 from typing import Optional
 
 def get_user_by_username(db: Session, username: str) -> Optional[User]:
@@ -24,8 +24,8 @@ def create_user(db: Session, user: UserCreate) -> User:
     db_user = User(
         username=user.username,
         email=user.email,
-        full_name=user.full_name,
-        hashed_password=hashed_password
+        hashed_password=hashed_password,
+        role=user.role
     )
     db.add(db_user)
     db.commit()
