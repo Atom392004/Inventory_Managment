@@ -105,6 +105,9 @@ def record_stock_transfer(
     if not from_wh or not to_wh:
         raise HTTPException(status_code=404, detail="One or both warehouses not found.")
 
+    if not from_wh.is_available:
+        raise HTTPException(status_code=400, detail="Cannot transfer from an unavailable warehouse.")
+
     if not to_wh.is_available:
         raise HTTPException(status_code=400, detail="Cannot transfer to an unavailable warehouse.")
 
@@ -225,6 +228,7 @@ def list_stock_movements(
 ):
     query = db.query(
         models.StockMovement,
+        models.Product.name.label("product_name"),
         models.User.username.label("username")
     ).select_from(models.StockMovement).join(models.Product, models.StockMovement.product_id == models.Product.id).outerjoin(models.User, models.StockMovement.user_id == models.User.id)
 
@@ -248,8 +252,9 @@ def list_stock_movements(
     movements_with_users = query.order_by(models.StockMovement.created_at.desc()).all()
 
     results = []
-    for movement, username in movements_with_users:
+    for movement, product_name, username in movements_with_users:
         movement_dict = schemas.StockMovementInDB.model_validate(movement).model_dump()
+        movement_dict["product_name"] = product_name
         movement_dict["username"] = username or "Unknown"
         results.append(movement_dict)
 

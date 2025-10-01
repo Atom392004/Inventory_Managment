@@ -102,35 +102,102 @@ def get_dashboard_stats(db: Session = Depends(get_db), current_user = Depends(ge
 
     # Get recent stock movements (last 6 months)
     six_months_ago = datetime.utcnow() - timedelta(days=180)
-    if db.bind.dialect.name == 'sqlite':
-        # SQLite does not support to_char, use strftime instead
-        recent_movements_query = db.query(
-            func.strftime('%Y-%m', models.StockMovement.created_at).label('month'),
-            func.sum(models.StockMovement.quantity).label('total_quantity')
-        ).join(models.Product, models.StockMovement.product_id == models.Product.id).filter(
-            models.StockMovement.created_at >= six_months_ago
-        )
-        if current_user.role != "admin":
-            recent_movements_query = recent_movements_query.filter(models.Product.owner_id == current_user.id)
-        recent_movements = recent_movements_query.group_by(
-            func.strftime('%Y-%m', models.StockMovement.created_at)
-        ).order_by(
-            'month'
-        ).all()
+    if current_user.role == "warehouse_owner":
+        # For warehouse owners, get movements per user associated with their warehouses
+        if db.bind.dialect.name == 'sqlite':
+            user_movements_query = db.query(
+                func.strftime('%Y-%m', models.StockMovement.created_at).label('month'),
+                models.User.username.label('username'),
+                func.sum(models.StockMovement.quantity).label('total_quantity')
+            ).join(models.Product, models.StockMovement.product_id == models.Product.id).join(
+                models.User, models.StockMovement.user_id == models.User.id
+            ).join(
+                models.Warehouse, models.StockMovement.warehouse_id == models.Warehouse.id
+            ).filter(
+                models.StockMovement.created_at >= six_months_ago,
+                models.Warehouse.owner_id == current_user.id,
+                models.Product.owner_id == current_user.id
+            ).group_by(
+                func.strftime('%Y-%m', models.StockMovement.created_at),
+                models.User.username
+            ).order_by(
+                'month', models.User.username
+            ).all()
+        else:
+            user_movements_query = db.query(
+                func.to_char(models.StockMovement.created_at, 'YYYY-MM').label('month'),
+                models.User.username.label('username'),
+                func.sum(models.StockMovement.quantity).label('total_quantity')
+            ).join(models.Product, models.StockMovement.product_id == models.Product.id).join(
+                models.User, models.StockMovement.user_id == models.User.id
+            ).join(
+                models.Warehouse, models.StockMovement.warehouse_id == models.Warehouse.id
+            ).filter(
+                models.StockMovement.created_at >= six_months_ago,
+                models.Warehouse.owner_id == current_user.id,
+                models.Product.owner_id == current_user.id
+            ).group_by(
+                func.to_char(models.StockMovement.created_at, 'YYYY-MM'),
+                models.User.username
+            ).order_by(
+                'month', models.User.username
+            ).all()
+
+        # Group by month, then by user
+        movements_by_month = {}
+        for movement in user_movements_query:
+            month = movement[0]
+            username = movement[1]
+            quantity = movement[2]
+            if month not in movements_by_month:
+                movements_by_month[month] = {}
+            movements_by_month[month][username] = quantity
+
+        stock_movements_trend = []
+        for month in sorted(movements_by_month.keys()):
+            users_data = movements_by_month[month]
+            stock_movements_trend.append({
+                "month": month,
+                "users": [{"username": user, "quantity": qty} for user, qty in users_data.items()]
+            })
     else:
-        recent_movements_query = db.query(
-            func.to_char(models.StockMovement.created_at, 'YYYY-MM').label('month'),
-            func.sum(models.StockMovement.quantity).label('total_quantity')
-        ).join(models.Product, models.StockMovement.product_id == models.Product.id).filter(
-            models.StockMovement.created_at >= six_months_ago
-        )
-        if current_user.role != "admin":
-            recent_movements_query = recent_movements_query.filter(models.Product.owner_id == current_user.id)
-        recent_movements = recent_movements_query.group_by(
-            func.to_char(models.StockMovement.created_at, 'YYYY-MM')
-        ).order_by(
-            'month'
-        ).all()
+        # For admin and normal users, keep the total trend
+        if db.bind.dialect.name == 'sqlite':
+            recent_movements_query = db.query(
+                func.strftime('%Y-%m', models.StockMovement.created_at).label('month'),
+                func.sum(models.StockMovement.quantity).label('total_quantity')
+            ).join(models.Product, models.StockMovement.product_id == models.Product.id).filter(
+                models.StockMovement.created_at >= six_months_ago
+            )
+            if current_user.role != "admin":
+                recent_movements_query = recent_movements_query.filter(models.Product.owner_id == current_user.id)
+            recent_movements = recent_movements_query.group_by(
+                func.strftime('%Y-%m', models.StockMovement.created_at)
+            ).order_by(
+                'month'
+            ).all()
+        else:
+            recent_movements_query = db.query(
+                func.to_char(models.StockMovement.created_at, 'YYYY-MM').label('month'),
+                func.sum(models.StockMovement.quantity).label('total_quantity')
+            ).join(models.Product, models.StockMovement.product_id == models.Product.id).filter(
+                models.StockMovement.created_at >= six_months_ago
+            )
+            if current_user.role != "admin":
+                recent_movements_query = recent_movements_query.filter(models.Product.owner_id == current_user.id)
+            recent_movements = recent_movements_query.group_by(
+                func.to_char(models.StockMovement.created_at, 'YYYY-MM')
+            ).order_by(
+                'month'
+            ).all()
+
+        stock_movements_trend = [
+            {
+                "month": movement[0],
+                "total_quantity": movement[1]
+            }
+            for movement in recent_movements
+        ]
 
     # Get stock distribution by warehouse
     stock_by_warehouse_query = db.query(
@@ -215,13 +282,7 @@ def get_dashboard_stats(db: Session = Depends(get_db), current_user = Depends(ge
             }
             for product in low_stock_products
         ],
-        "stock_movements_trend": [
-            {
-                "month": movement[0],
-                "total_quantity": movement[1]
-            }
-            for movement in recent_movements
-        ],
+        "stock_movements_trend": stock_movements_trend,
         "stock_by_warehouse": [
             {
                 "warehouse_name": item[0],

@@ -17,6 +17,7 @@ class WarehouseInDB(BaseModel):
     id: int
     name: str
     location: Optional[str] = None
+    is_available: Optional[bool] = True
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     created_at: Optional[datetime]

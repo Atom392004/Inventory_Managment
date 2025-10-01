@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { warehouses } from "../api/apiClient.jsx";
 import { useAuth } from "../state/auth";
 import WarehouseForm from "../components/WarehouseForm";
@@ -6,17 +7,18 @@ import { Card } from "../components/ui/Card.tsx";
 import { ToggleSwitch } from "../components/ui/ToggleSwitch.tsx";
 
 export default function WarehousesPage() {
+  const navigate = useNavigate();
   const { token, user } = useAuth();
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
-  const [details, setDetails] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [locationSearch, setLocationSearch] = useState("");
   const [nearMeFilter, setNearMeFilter] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
+  const [details, setDetails] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   async function load() {
     try {
@@ -49,9 +51,6 @@ export default function WarehousesPage() {
       await warehouses.update(id, payload, token);
       setEditing(null);
       load();
-      if (selectedWarehouseId === id) {
-        setDetails(null); // Reset details if editing the selected one
-      }
       window.dispatchEvent(new Event('dashboardRefresh'));
     } catch (e) {
       alert("Failed to update warehouse: " + (e?.body?.detail || e?.message || e));
@@ -63,10 +62,6 @@ export default function WarehousesPage() {
     try {
       await warehouses.remove(id, token);
       load();
-      if (selectedWarehouseId === id) {
-        setSelectedWarehouseId(null);
-        setDetails(null);
-      }
       window.dispatchEvent(new Event('dashboardRefresh'));
     } catch (e) {
       alert("Failed to delete warehouse: " + (e?.body?.detail || e?.message || e));
@@ -74,12 +69,29 @@ export default function WarehousesPage() {
   };
 
   const toggleAvailability = async (id) => {
+    // Optimistic UI update
+    const updatedItems = items.map(w => {
+      if (w.id === id) {
+        return { ...w, is_available: !w.is_available };
+      }
+      return w;
+    });
+    setItems(updatedItems);
+
     try {
       await warehouses.toggleAvailability(id, token);
       load();
+      if (selectedWarehouseId === id) {
+        const warehouse = updatedItems.find(w => w.id === id);
+        if (warehouse) {
+          loadDetails(warehouse);
+        }
+      }
       window.dispatchEvent(new Event('dashboardRefresh'));
     } catch (e) {
-      alert("Failed to toggle availability: " + (e?.body?.detail || e?.message || e));
+      // Revert state on failure
+      setItems(items);
+      alert("Failed to toggle availability: " + (e?.response?.data?.detail || e?.message || "Unknown error"));
     }
   };
 
@@ -102,12 +114,8 @@ export default function WarehousesPage() {
   };
 
   const toggleDetails = (warehouse) => {
-    if (selectedWarehouseId === warehouse.id) {
-      setSelectedWarehouseId(null);
-      setDetails(null);
-    } else {
-      loadDetails(warehouse);
-    }
+    // Redirect to warehouse detail page instead of toggling inline details
+    navigate(`/warehouses/${warehouse.id}`);
   };
 
   const getSummary = (warehouse) => {
@@ -305,185 +313,168 @@ export default function WarehousesPage() {
           {getMyWarehouses().length === 0 ? (
             <p className="text-gray-500">No warehouses available for you.</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {getMyWarehouses().map((warehouse) => {
-                const summary = getSummary(warehouse);
-                const isExpanded = selectedWarehouseId === warehouse.id;
-                const isLoading = loading && selectedWarehouseId === warehouse.id;
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Availability</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Products in Stock</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {getMyWarehouses().map((warehouse) => {
+                    const summary = getSummary(warehouse);
+                    const isExpanded = selectedWarehouseId === warehouse.id;
+                    const isLoading = loading && selectedWarehouseId === warehouse.id;
 
-                return (
-                  <Card key={warehouse.id} className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col h-auto">
-                    {/* Card Header */}
-                    <Card.Header>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-xl font-semibold text-gray-900">{warehouse.name}</h3>
-                          {warehouse.location && (
-                            <p className="text-gray-600 mt-1">{warehouse.location}</p>
-                          )}
-                        </div>
-                        {(user?.role === 'admin' || (user?.role === 'warehouse_owner' && warehouse.owner_id === user.id)) && (
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => setEditing(warehouse)}
-                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => remove(warehouse.id)}
-                              className="text-red-600 hover:text-red-800 text-sm font-medium"
-                            >
-                              Delete
-                            </button>
-                          </div>
+                    return (
+                      <React.Fragment key={warehouse.id}>
+                        <tr key={`main-${warehouse.id}`}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{warehouse.name}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{warehouse.location || "—"}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {warehouse.is_available ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Available</span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Unavailable</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{summary.productCount}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{summary.totalValue}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex space-x-2">
+                              <button onClick={() => setEditing(warehouse)} className="text-blue-600 hover:text-blue-900">Edit</button>
+                              <button onClick={() => remove(warehouse.id)} className="text-red-600 hover:text-red-900">Delete</button>
+                              <ToggleSwitch checked={warehouse.is_available} onChange={() => toggleAvailability(warehouse.id)} label="" />
+                              <button onClick={() => toggleDetails(warehouse)} className="text-gray-600 hover:text-gray-900">View Details</button>
+                            </div>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr key={`expanded-${warehouse.id}`}>
+                            <td colSpan="6" className="px-6 py-4 bg-gray-50">
+                              {isLoading ? (
+                                <div className="text-center py-8 text-gray-500">Loading details...</div>
+                              ) : details && details.id === warehouse.id ? (
+                                <>
+                                  {/* Summary */}
+                                  <div className="mb-6 p-4 bg-white rounded-lg">
+                                    <h4 className="text-lg font-semibold mb-2 text-gray-900">Warehouse Summary</h4>
+                                    <p className="text-gray-600">Total Value: {formatCurrency(details.total_value || details.totalValue || 0)}</p>
+                                    <p className="text-gray-600">Products in Stock: {details.product_count ?? details.products_in_stock?.length ?? 0}</p>
+                                    <div className="mt-3">
+                                      <ToggleSwitch
+                                        checked={warehouse.is_available}
+                                        onChange={() => toggleAvailability(warehouse.id)}
+                                        label={warehouse.is_available ? "Available" : "Unavailable"}
+                                      />
+                                      <button
+                                        onClick={() => loadDetails(warehouse)}
+                                        className="px-3 py-1 text-sm bg-gray-200 rounded-md hover:bg-gray-300 ml-2"
+                                      >
+                                        Refresh
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {/* Products Table */}
+                                  <div className="mb-8">
+                                    <h4 className="text-lg font-semibold mb-4 text-gray-900">Products in Stock</h4>
+                                    {details.products_in_stock && details.products_in_stock.length > 0 ? (
+                                      <div className="overflow-x-auto">
+                                        <table className="min-w-full text-sm divide-y divide-gray-200">
+                                          <thead>
+                                            <tr className="bg-gray-50 text-left">
+                                              <th className="px-4 py-2">Product</th>
+                                              <th className="px-4 py-2">SKU</th>
+                                              <th className="px-4 py-2 text-right">Quantity</th>
+                                              <th className="px-4 py-2 text-right">Unit Price</th>
+                                              <th className="px-4 py-2 text-right">Total</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="bg-white divide-y divide-gray-100">
+                                            {details.products_in_stock.map((p) => {
+                                              const prod = p.product || p.product_detail || p;
+                                              const qty = p.stock ?? p.quantity ?? p.qty ?? 0;
+                                              const unit = p.unit_price ?? prod.unit_price ?? p.price ?? 0;
+                                              const total = Number(qty) * Number(unit || 0);
+                                              return (
+                                                <tr key={p.product_id || prod.id || Math.random()}>
+                                                  <td className="px-4 py-3">
+                                                    <div className="font-medium text-gray-900">{prod.name || prod.product_name || "—"}</div>
+                                                  </td>
+                                                  <td className="px-4 py-3 text-gray-600">{prod.sku || prod.SKU || "—"}</td>
+                                                  <td className="px-4 py-3 text-right">{qty}</td>
+                                                  <td className="px-4 py-3 text-right">{formatCurrency(unit)}</td>
+                                                  <td className="px-4 py-3 text-right">{formatCurrency(total)}</td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    ) : (
+                                      <p className="text-gray-500">No products in stock for this warehouse.</p>
+                                    )}
+                                  </div>
+                                  {/* Ledger / Recent Movements */}
+                                  <div>
+                                    <h4 className="text-lg font-semibold mb-4 text-gray-900">Recent Movements</h4>
+                                    {(
+                                      details.stock_movements ||
+                                      details.ledger ||
+                                      details.recent_movements ||
+                                      details.movements ||
+                                      []
+                                    ).length > 0 ? (
+                                      <div className="overflow-x-auto">
+                                        <table className="min-w-full text-sm divide-y divide-gray-200">
+                                          <thead>
+                                            <tr className="bg-gray-50 text-left">
+                                              <th className="px-4 py-2">Date</th>
+                                              <th className="px-4 py-2">Type</th>
+                                              <th className="px-4 py-2">Product</th>
+                                              <th className="px-4 py-2 text-right">Quantity</th>
+                                              <th className="px-4 py-2">Reference</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="bg-white divide-y divide-gray-100">
+                                            {(details.stock_movements || details.ledger || details.recent_movements || details.movements || []).map((m) => {
+                                              const productName = (m.product && (m.product.name || m.product.product_name)) || m.product_name || m.product || "—";
+                                              const qty = m.quantity ?? m.qty ?? 0;
+                                              return (
+                                                <tr key={m.id || Math.random()}>
+                                                  <td className="px-4 py-3">{formatDate(m.created_at || m.date || m.timestamp || "")}</td>
+                                                  <td className="px-4 py-3">{m.movement_type || m.type || "—"}</td>
+                                                  <td className="px-4 py-3 text-gray-700">{productName}</td>
+                                                  <td className="px-4 py-3 text-right">{qty}</td>
+                                                  <td className="px-4 py-3">{m.reference_id || m.notes || m.reference || m.note || "-"}</td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    ) : (
+                                      <p className="text-gray-500">No recent movements for this warehouse.</p>
+                                    )}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-gray-500">No details available. Click "View Details" to load.</div>
+                              )}
+                            </td>
+                          </tr>
                         )}
-                      </div>
-                      <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-gray-600">
-                        <div>
-                          <span className="font-medium">Products in Stock:</span>
-                          <span className="ml-1">{summary.productCount}</span>
-                        </div>
-                        <div>
-                          <span className="font-medium">Total Value:</span>
-                          <span className="ml-1">{summary.totalValue}</span>
-                        </div>
-                      </div>
-                    </Card.Header>
-
-                    {/* Expand Button - Hide for normal users */}
-                    {user?.role !== "user" && (
-                      <button
-                        onClick={() => toggleDetails(warehouse)}
-                        className="w-full px-6 py-3 text-left bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
-                      >
-                        <span className="text-sm font-medium text-gray-700">
-                          {isExpanded ? "Hide Details" : "View Details"}
-                        </span>
-                        <span className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
-                          ▼
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Expanded Details */}
-{isExpanded && (
-  <Card.Body className="p-6 max-h-96 overflow-y-auto flex-1">
-    {isLoading ? (
-      <div className="text-center py-8 text-gray-500">Loading details...</div>
-    ) : details && details.id === warehouse.id ? (
-      <>
-        {/* Summary */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <h4 className="text-lg font-semibold mb-2 text-gray-900">Warehouse Summary</h4>
-          <p className="text-gray-600">Total Value: {formatCurrency(details.total_value || details.totalValue || 0)}</p>
-          <p className="text-gray-600">Products in Stock: {details.product_count ?? details.products_in_stock?.length ?? 0}</p>
-          <div className="mt-3">
-            <ToggleSwitch
-              checked={warehouse.is_available}
-              onChange={() => toggleAvailability(warehouse.id)}
-              label={warehouse.is_available ? "Available" : "Unavailable"}
-            />
-            <button
-              onClick={() => loadDetails(warehouse)}
-              className="px-3 py-1 text-sm bg-gray-200 rounded-md hover:bg-gray-300 ml-2"
-            >
-              Refresh
-            </button>
-          </div>
-        </div>
-        {/* Products Table */}
-        <div className="mb-8">
-          <h4 className="text-lg font-semibold mb-4 text-gray-900">Products in Stock</h4>
-          {details.products_in_stock && details.products_in_stock.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm divide-y divide-gray-200">
-                <thead>
-                  <tr className="bg-gray-50 text-left">
-                    <th className="px-4 py-2">Product</th>
-                    <th className="px-4 py-2">SKU</th>
-                    <th className="px-4 py-2 text-right">Quantity</th>
-                    <th className="px-4 py-2 text-right">Unit Price</th>
-                    <th className="px-4 py-2 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {details.products_in_stock.map((p) => {
-                    const prod = p.product || p.product_detail || p;
-                    const qty = p.quantity ?? p.qty ?? 0;
-                    const unit = p.unit_price ?? prod.unit_price ?? p.price ?? 0;
-                    const total = Number(qty) * Number(unit || 0);
-                    return (
-                      <tr key={p.product_id || prod.id || Math.random()}>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-gray-900">{prod.name || prod.product_name || "—"}</div>
-                        </td>
-                        <td className="px-4 py-3 text-gray-600">{prod.sku || prod.SKU || "—"}</td>
-                        <td className="px-4 py-3 text-right">{qty}</td>
-                        <td className="px-4 py-3 text-right">{formatCurrency(unit)}</td>
-                        <td className="px-4 py-3 text-right">{formatCurrency(total)}</td>
-                      </tr>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-          ) : (
-            <p className="text-gray-500">No products in stock for this warehouse.</p>
-          )}
-        </div>
-        {/* Ledger / Recent Movements */}
-        <div>
-          <h4 className="text-lg font-semibold mb-4 text-gray-900">Recent Movements</h4>
-          {(
-            details.stock_movements ||
-            details.ledger ||
-            details.recent_movements ||
-            details.movements ||
-            []
-          ).length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm divide-y divide-gray-200">
-                <thead>
-                  <tr className="bg-gray-50 text-left">
-                    <th className="px-4 py-2">Date</th>
-                    <th className="px-4 py-2">Type</th>
-                    <th className="px-4 py-2">Product</th>
-                    <th className="px-4 py-2 text-right">Quantity</th>
-                    <th className="px-4 py-2">Reference</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {(details.stock_movements || details.ledger || details.recent_movements || details.movements || []).map((m) => {
-                    const productName = (m.product && (m.product.name || m.product.product_name)) || m.product_name || m.product || "—";
-                    const qty = m.quantity ?? m.qty ?? 0;
-                    return (
-                      <tr key={m.id || Math.random()}>
-                        <td className="px-4 py-3">{formatDate(m.created_at || m.date || m.timestamp || "")}</td>
-                        <td className="px-4 py-3">{m.movement_type || m.type || "—"}</td>
-                        <td className="px-4 py-3 text-gray-700">{productName}</td>
-                        <td className="px-4 py-3 text-right">{qty}</td>
-                        <td className="px-4 py-3">{m.reference || m.note || "-"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-gray-500">No recent movements for this warehouse.</p>
-          )}
-        </div>
-      </>
-    ) : (
-      <div className="text-gray-500">No details available. Click "View Details" to load.</div>
-    )}
-  </Card.Body>
-)}
-                    </Card>
-                  );
-                })}
-              </div>
             )}
           </section>
       )}
@@ -494,11 +485,9 @@ export default function WarehousesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {getAllWarehouses().map((warehouse) => {
                 const summary = getSummary(warehouse);
-                const isExpanded = selectedWarehouseId === warehouse.id;
-                const isLoading = loading && selectedWarehouseId === warehouse.id;
 
                 return (
-                  <Card key={warehouse.id} className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col h-auto">
+                  <Card key={warehouse.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                     <Card.Header>
                       <div className="flex justify-between items-start">
                         <div>
@@ -506,23 +495,19 @@ export default function WarehousesPage() {
                           {warehouse.location && (
                             <p className="text-gray-600 mt-1">{warehouse.location}</p>
                           )}
-                        </div>
-                        {(user?.role === 'admin' || (user?.role === 'warehouse_owner' && warehouse.owner_id === user.id)) && (
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => setEditing(warehouse)}
-                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => remove(warehouse.id)}
-                              className="text-red-600 hover:text-red-800 text-sm font-medium"
-                            >
-                              Delete
-                            </button>
+                          <div className="mt-2">
+                            {warehouse.is_available ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Available
+                              </span>
+                            ) : (
+                              <div className="text-red-600 text-sm font-medium">
+                                Unavailable: Movement to this warehouse is not available for a short period of time. Will be available soon.
+                              </div>
+                            )}
                           </div>
-                        )}
+                        </div>
+
                       </div>
                       <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-gray-600">
                         <div>
@@ -535,137 +520,6 @@ export default function WarehousesPage() {
                         </div>
                       </div>
                     </Card.Header>
-
-                    {/* Expand Button - Hide for normal users */}
-                    {user?.role !== "user" && (
-                      <button
-                        onClick={() => toggleDetails(warehouse)}
-                        className="w-full px-6 py-3 text-left bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
-                      >
-                        <span className="text-sm font-medium text-gray-700">
-                          {isExpanded ? "Hide Details" : "View Details"}
-                        </span>
-                        <span className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
-                          ▼
-                        </span>
-                      </button>
-                    )}
-
-                    {isExpanded && (
-                      <Card.Body className="p-6 max-h-96 overflow-y-auto flex-1">
-                        {isLoading ? (
-                          <div className="text-center py-8 text-gray-500">Loading details...</div>
-                        ) : details && details.id === warehouse.id ? (
-                          <>
-                            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                              <h4 className="text-lg font-semibold mb-2 text-gray-900">Warehouse Summary</h4>
-                              <p className="text-gray-600">Total Value: {formatCurrency(details.total_value || details.totalValue || 0)}</p>
-                              <p className="text-gray-600">Products in Stock: {details.product_count ?? details.products_in_stock?.length ?? 0}</p>
-                              <div className="mt-3">
-                                <ToggleSwitch
-                                  checked={warehouse.is_available}
-                                  onChange={() => toggleAvailability(warehouse.id)}
-                                  disabled={warehouse.product_count > 0 && warehouse.is_available}
-                                  label={warehouse.is_available ? "Available" : "Unavailable"}
-                                />
-                                <button
-                                  onClick={() => loadDetails(warehouse)}
-                                  className="px-3 py-1 text-sm bg-gray-200 rounded-md hover:bg-gray-300 ml-2"
-                                >
-                                  Refresh
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Products table */}
-                            <div className="mb-8">
-                              <h4 className="text-lg font-semibold mb-4 text-gray-900">Products in Stock</h4>
-                              {details.products_in_stock && details.products_in_stock.length > 0 ? (
-                                <div className="overflow-x-auto">
-                                  <table className="min-w-full text-sm divide-y divide-gray-200">
-                                    <thead>
-                                      <tr className="bg-gray-50 text-left">
-                                        <th className="px-4 py-2">Product</th>
-                                        <th className="px-4 py-2">SKU</th>
-                                        <th className="px-4 py-2 text-right">Quantity</th>
-                                        <th className="px-4 py-2 text-right">Unit Price</th>
-                                        <th className="px-4 py-2 text-right">Total</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-100">
-                                      {details.products_in_stock.map((p) => {
-                                        const prod = p.product || p.product_detail || p;
-                                        const qty = p.quantity ?? p.qty ?? 0;
-                                        const unit = p.unit_price ?? prod.unit_price ?? p.price ?? 0;
-                                        const total = Number(qty) * Number(unit || 0);
-                                        return (
-                                          <tr key={p.product_id || prod.id || Math.random()}>
-                                            <td className="px-4 py-3">
-                                              <div className="font-medium text-gray-900">{prod.name || prod.product_name || "—"}</div>
-                                            </td>
-                                            <td className="px-4 py-3 text-gray-600">{prod.sku || prod.SKU || "—"}</td>
-                                            <td className="px-4 py-3 text-right">{qty}</td>
-                                            <td className="px-4 py-3 text-right">{formatCurrency(unit)}</td>
-                                            <td className="px-4 py-3 text-right">{formatCurrency(total)}</td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              ) : (
-                                <p className="text-gray-500">No products in stock for this warehouse.</p>
-                              )}
-                            </div>
-
-                            {/* Movements */}
-                            <div>
-                              <h4 className="text-lg font-semibold mb-4 text-gray-900">Recent Movements</h4>
-                              {(
-                                details.stock_movements ||
-                                details.ledger ||
-                                details.recent_movements ||
-                                details.movements ||
-                                []
-                              ).length > 0 ? (
-                                <div className="overflow-x-auto">
-                                  <table className="min-w-full text-sm divide-y divide-gray-200">
-                                    <thead>
-                                      <tr className="bg-gray-50 text-left">
-                                        <th className="px-4 py-2">Date</th>
-                                        <th className="px-4 py-2">Type</th>
-                                        <th className="px-4 py-2">Product</th>
-                                        <th className="px-4 py-2 text-right">Quantity</th>
-                                        <th className="px-4 py-2">Reference</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-100">
-                                      {(details.stock_movements || details.ledger || details.recent_movements || details.movements || []).map((m) => {
-                                        const productName = (m.product && (m.product.name || m.product.product_name)) || m.product_name || m.product || "—";
-                                        const qty = m.quantity ?? m.qty ?? 0;
-                                        return (
-                                          <tr key={m.id || Math.random()}>
-                                            <td className="px-4 py-3">{formatDate(m.created_at || m.date || m.timestamp || "")}</td>
-                                            <td className="px-4 py-3">{m.movement_type || m.type || "—"}</td>
-                                            <td className="px-4 py-3 text-gray-700">{productName}</td>
-                                            <td className="px-4 py-3 text-right">{qty}</td>
-                                            <td className="px-4 py-3">{m.reference || m.note || "-"}</td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              ) : (
-                                <p className="text-gray-500">No recent movements for this warehouse.</p>
-                              )}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-gray-500">No details available. Click "View Details" to load.</div>
-                        )}
-                      </Card.Body>
-                    )}
                   </Card>
                 );
               })}

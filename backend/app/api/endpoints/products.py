@@ -38,7 +38,8 @@ def list_products(
     created_from_date: Optional[datetime] = None,
     created_to_date: Optional[datetime] = None,
     include_inactive: bool = Query(False),
-    filter: Optional[str] = Query(None, pattern="^(low_stock)$"),
+    filter: Optional[str] = Query(None, pattern="^(low_stock|in_my_warehouses)$"),
+    ownership_filter: Optional[str] = Query(None, pattern="^(all|my|other)$"),
     current_user: models.User = Depends(get_current_user)
 ):
     # Count query for total
@@ -68,6 +69,43 @@ def list_products(
 
         subq = subq.subquery()
         count_query = db.query(func.count(subq.c.id)).select_from(subq).filter(subq.c.total_stock <= 10)
+    elif filter == "in_my_warehouses":
+        # Count unique products in warehouses owned by current_user with ownership_filter
+        subq = db.query(
+            models.Product.id,
+            func.coalesce(func.sum(models.StockMovement.quantity), 0).label("total_stock"),
+            models.Product.owner_id
+        ).join(
+            models.StockMovement, models.Product.id == models.StockMovement.product_id
+        ).join(
+            models.Warehouse, models.StockMovement.warehouse_id == models.Warehouse.id
+        ).filter(
+            models.Warehouse.owner_id == current_user.id
+        )
+
+        # Apply ownership_filter
+        if ownership_filter == "my":
+            subq = subq.filter(models.Product.owner_id == current_user.id)
+        elif ownership_filter == "other":
+            subq = subq.filter(models.Product.owner_id != current_user.id)
+        # if ownership_filter is "all" or None, no filter applied
+
+        # Apply filters to subq
+        if not include_inactive:
+            subq = subq.filter(models.Product.is_active == True)
+        if search:
+            subq = subq.filter(or_(
+                models.Product.name.ilike(f"%{search}%"),
+                models.Product.sku.ilike(f"%{search}%")
+            ))
+        if created_from_date:
+            subq = subq.filter(models.Product.created_at >= created_from_date)
+        if created_to_date:
+            subq = subq.filter(models.Product.created_at <= created_to_date)
+
+        subq = subq.group_by(models.Product.id, models.Product.owner_id).subquery()
+
+        count_query = db.query(func.count(subq.c.id)).select_from(subq)
     else:
         count_query = db.query(func.count(models.Product.id))
 
@@ -93,38 +131,78 @@ def list_products(
 
     total = count_query.scalar()
 
-    query = db.query(
-        models.Product,
-        func.coalesce(func.sum(models.StockMovement.quantity), 0).label("total_stock")
-    ).outerjoin(
-        models.StockMovement, models.Product.id == models.StockMovement.product_id
-    )
+    if filter == "in_my_warehouses":
+        query = db.query(
+            models.Product,
+            models.User.username.label("owner_name"),
+            func.coalesce(func.sum(models.StockMovement.quantity), 0).label("total_stock")
+        ).join(
+            models.StockMovement, models.Product.id == models.StockMovement.product_id
+        ).join(
+            models.Warehouse, models.StockMovement.warehouse_id == models.Warehouse.id
+        ).join(
+            models.User, models.Product.owner_id == models.User.id
+        ).filter(
+            models.Warehouse.owner_id == current_user.id
+        )
 
-    # filter active unless include_inactive
-    if not include_inactive:
-        query = query.filter(models.Product.is_active == True)
+        # Apply ownership_filter
+        if ownership_filter == "my":
+            query = query.filter(models.Product.owner_id == current_user.id)
+        elif ownership_filter == "other":
+            query = query.filter(models.Product.owner_id != current_user.id)
+        # if ownership_filter is "all" or None, no filter applied
 
-    # non-admin users see only their products
-    if current_user.role != "admin":
-        query = query.filter(models.Product.owner_id == current_user.id)
+        # filter active unless include_inactive
+        if not include_inactive:
+            query = query.filter(models.Product.is_active == True)
 
-    if search:
-        query = query.filter(or_(
-            models.Product.name.ilike(f"%{search}%"),
-            models.Product.sku.ilike(f"%{search}%")
-        ))
+        if search:
+            query = query.filter(or_(
+                models.Product.name.ilike(f"%{search}%"),
+                models.Product.sku.ilike(f"%{search}%")
+            ))
 
-    if created_from_date:
-        query = query.filter(models.Product.created_at >= created_from_date)
+        if created_from_date:
+            query = query.filter(models.Product.created_at >= created_from_date)
 
-    if created_to_date:
-        query = query.filter(models.Product.created_at <= created_to_date)
+        if created_to_date:
+            query = query.filter(models.Product.created_at <= created_to_date)
 
-    query = query.group_by(models.Product.id)
+        query = query.group_by(models.Product.id, models.User.username)
+    else:
+        query = db.query(
+            models.Product,
+            func.coalesce(func.sum(models.StockMovement.quantity), 0).label("total_stock")
+        ).outerjoin(
+            models.StockMovement, models.Product.id == models.StockMovement.product_id
+        )
 
-    # Apply filter after grouping
-    if filter == "low_stock":
-        query = query.having(func.coalesce(func.sum(models.StockMovement.quantity), 0) <= 10)
+        # filter active unless include_inactive
+        if not include_inactive:
+            query = query.filter(models.Product.is_active == True)
+
+        # non-admin users see only their products
+        if current_user.role != "admin":
+            query = query.filter(models.Product.owner_id == current_user.id)
+
+        if search:
+            query = query.filter(or_(
+                models.Product.name.ilike(f"%{search}%"),
+                models.Product.sku.ilike(f"%{search}%")
+            ))
+
+        if created_from_date:
+            query = query.filter(models.Product.created_at >= created_from_date)
+
+        if created_to_date:
+            query = query.filter(models.Product.created_at <= created_to_date)
+
+        query = query.group_by(models.Product.id)
+
+        # Apply filter after grouping
+        if filter == "low_stock":
+            query = query.having(func.coalesce(func.sum(models.StockMovement.quantity), 0) <= 10)
 
     # Apply sorting
     sort_column, sort_order = sort_by.rsplit('_', 1)
@@ -143,10 +221,17 @@ def list_products(
     products_with_stock = query.offset((page - 1) * page_size).limit(page_size).all()
 
     results = []
-    for product, total_stock in products_with_stock:
-        product_summary = schemas.ProductSummary.model_validate(product)
-        product_summary.total_stock = int(total_stock)
-        results.append(product_summary)
+    if filter == "in_my_warehouses":
+        for product, owner_name, total_stock in products_with_stock:
+            product_summary = schemas.ProductSummary.model_validate(product)
+            product_summary.owner_name = owner_name
+            product_summary.total_stock = int(total_stock)
+            results.append(product_summary)
+    else:
+        for product, total_stock in products_with_stock:
+            product_summary = schemas.ProductSummary.model_validate(product)
+            product_summary.total_stock = int(total_stock)
+            results.append(product_summary)
 
     total_pages = (total + page_size - 1) // page_size if total > 0 else 1
 

@@ -219,7 +219,7 @@ export default function ProfilePage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                     <p className="text-lg text-gray-900">
-                      {profile.role === 'ADMIN' ? 'Admin' : profile.role === 'WAREHOUSE_OWNER' ? 'Warehouse Owner' : 'User'}
+                      {profile.role === 'admin' ? 'Admin' : profile.role === 'warehouse_owner' ? 'Warehouse Owner' : 'User'}
                     </p>
                   </div>
                   <div>

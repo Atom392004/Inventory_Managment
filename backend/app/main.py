@@ -9,6 +9,7 @@ from app.core import security
 from app import models
 from fastapi.middleware.cors import CORSMiddleware
 import os
+from contextlib import asynccontextmanager
 
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -18,14 +19,39 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Validate settings
+    settings.validate()
+    # Test database connection
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+        logger.info("Database connection successful")
+    except Exception as e:
+        logger.error(f"Database connection failed: {str(e)}")
+        raise
+    finally:
+        db.close()
+
+    # Create database tables
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables created or already exist")
+
+    # Ensure admin user exists
+    ensure_admin()
+
+    yield
+
 app = FastAPI(
     title="Inventory Management API",
     description="Inventory Management System API",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Configure CORS with specific origins
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3001,http://127.0.0.1:3001")
 origins = [origin.strip() for origin in allowed_origins.split(",")]
 
 
@@ -33,7 +59,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"]
 )
@@ -55,46 +81,26 @@ async def not_found_handler(request, exc):
         content={"detail": "Not Found"}
     )
 
-@app.on_event("startup")
-async def startup_event():
-    # Validate settings
-    settings.validate()
-    # Test database connection
-    db = SessionLocal()
-    try:
-        db.execute(text("SELECT 1"))
-        logger.info("Database connection successful")
-    except Exception as e:
-        logger.error(f"Database connection failed: {str(e)}")
-        raise
-    finally:
-        db.close()
-
 @app.get("/")
 async def health_check():
     return {"status": "ok", "message": "Server is running"}
-
-
-
-
-
 
 # ensure admin exists from env vars
 def ensure_admin():
     admin_username = os.getenv("ADMIN_USERNAME")
     admin_password = os.getenv("ADMIN_PASSWORD")
     admin_email = os.getenv("ADMIN_EMAIL")
-    
+
     if not all([admin_username, admin_password, admin_email]):
         logger.info("Admin credentials not provided in env vars; skipping admin creation.")
         return
-    
+
     db = SessionLocal()
     try:
         existing = db.query(models.User).filter(models.User.username == admin_username).first()
         if not existing:
             hashed = security.get_password_hash(admin_password)
-            user = models.User(username=admin_username, email=admin_email, hashed_password=hashed, role="ADMIN")
+            user = models.User(username=admin_username, email=admin_email, hashed_password=hashed, role="admin")
             db.add(user)
             db.commit()
             db.refresh(user)
@@ -106,8 +112,6 @@ def ensure_admin():
         db.rollback()
     finally:
         db.close()
-
-ensure_admin()
 
 # routers
 app.include_router(auth.router, tags=["Auth"])

@@ -1,6 +1,6 @@
 ﻿import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3002';
 
 // Create axios instance with error handling
 const api = axios.create({
@@ -219,6 +219,15 @@ export const products = {
       return response.data;
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to fetch products');
+    }
+  },
+
+  listInMyWarehouses: async (params, token) => {
+    try {
+      const response = await api.get('/products', { headers: authHeader(token), params: { ...params, filter: 'in_my_warehouses' } });
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to fetch products in my warehouses');
     }
   },
 

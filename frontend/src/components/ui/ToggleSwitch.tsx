@@ -10,21 +10,20 @@ interface ToggleSwitchProps {
 }
 
 export function ToggleSwitch({ checked, onChange, disabled = false, className, label }: ToggleSwitchProps) {
+  const handleToggle = () => {
+    if (!disabled) {
+      onChange(!checked);
+    }
+  };
+
   return (
-    <label className={clsx('inline-flex items-center cursor-pointer', disabled && 'cursor-not-allowed', className)}>
+    <div className={clsx('inline-flex items-center cursor-pointer', disabled && 'cursor-not-allowed', className)} onClick={handleToggle}>
       {label && (
         <span className={clsx('mr-3 text-sm font-medium', disabled ? 'text-gray-400' : 'text-gray-700')}>
           {label}
         </span>
       )}
       <div className="relative">
-        <input
-          type="checkbox"
-          className="sr-only"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          disabled={disabled}
-        />
         <div
           className={clsx(
             'block w-10 h-6 rounded-full transition-colors',
@@ -39,6 +38,6 @@ export function ToggleSwitch({ checked, onChange, disabled = false, className, l
           )}
         />
       </div>
-    </label>
+    </div>
   );
 }

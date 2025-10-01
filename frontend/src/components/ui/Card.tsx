@@ -48,3 +48,5 @@ Card.Footer = function CardFooter({ className, children, ...props }: CardProps) 
     </div>
   )
 }
+
+Card.Content = Card.Body

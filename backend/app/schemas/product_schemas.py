@@ -25,6 +25,10 @@ class ProductInDB(ProductBase):
 
 class ProductSummary(ProductInDB):
     total_stock: int = 0
+    owner_name: Optional[str] = None
+    warehouse_name: Optional[str] = None
+    warehouse_id: Optional[int] = None
+    stock_in_warehouse: Optional[int] = None
 
 class ProductDetails(ProductInDB):
     stock_distribution: Optional[List[dict]] = []

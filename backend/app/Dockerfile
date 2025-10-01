@@ -1,15 +1,15 @@
 # Backend Dockerfile
 FROM python:3.11-slim
 
-WORKDIR /src
+WORKDIR /app
 
 # Copy requirements.txt from the build context root
-COPY requirements.txt ./
+COPY requirements.txt ./ 
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy all app code into the container
-COPY . /src/app
+COPY . /app
 
-ENV PYTHONPATH=/src
+ENV PYTHONPATH=/app
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

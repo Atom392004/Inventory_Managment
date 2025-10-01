@@ -122,8 +122,6 @@ export default function StockMovementsPage() {
     }
   };
 
-  const getProductName = (id) =>
-    productsList.find((p) => p.id === id)?.name || `#${id}`;
   const getWarehouseName = (id) =>
     warehousesList.find((w) => w.id === id)?.name || (id ? `#${id}` : "-");
 
@@ -281,7 +279,7 @@ export default function StockMovementsPage() {
           <tbody>
             {movements.map((m) => (
               <tr key={m.id} className="border-t hover:bg-gray-50">
-                <td className="p-2">{getProductName(m.product_id)}</td>
+                <td className="p-2">{m.product_name || `#${m.product_id}`}</td>
                 <td className="p-2">{getWarehouseName(m.warehouse_id)}</td>
                 <td className="p-2">{m.quantity}</td>
                 <td className="p-2">{getMovementTypeDisplay(m.movement_type)}</td>

@@ -134,24 +134,10 @@ def toggle_warehouse_availability(warehouse_id: int, db: Session = Depends(get_d
         raise HTTPException(status_code=404, detail="Warehouse not found")
     if current_user.role == "admin":
         pass
-    elif current_user.role == "warehouse_owner" and wh.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    elif current_user.role == "warehouse_owner" and wh.owner_id == current_user.id:
+        pass
     else:
         raise HTTPException(status_code=403, detail="Forbidden")
-
-    # Check if trying to set to unavailable and warehouse has stock
-    new_available = not wh.is_available
-    if not new_available:  # Trying to set to False (unavailable)
-        # Check if has stock: any product with net stock > 0
-        has_stock = db.query(
-            db.query(models.StockMovement).filter(
-                models.StockMovement.warehouse_id == warehouse_id
-            ).group_by(models.StockMovement.product_id).having(
-                func.sum(models.StockMovement.quantity) > 0
-            ).exists()
-        ).scalar()
-        if has_stock:
-            raise HTTPException(status_code=400, detail="Cannot make warehouse unavailable while it has stock")
 
     wh.is_available = not wh.is_available
     db.commit()
@@ -258,6 +244,7 @@ def get_warehouse_details(
     total_value = sum(p["price"] * p["stock"] for p in products_list)
 
     response = schemas.WarehouseDetails.model_validate(wh)
+    response.product_count = len(products_list)
     response.products_in_stock = products_list
     response.recent_movements = movements_list
     response.total_value = total_value
