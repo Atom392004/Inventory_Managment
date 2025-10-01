@@ -19,6 +19,14 @@ This project is a full-stack inventory management system with role-based authent
 - **Warehouse Owner**: Manage products and stock movements for their owned warehouses.
 - **Normal User**: View all warehouses and manage stock movements related to their assigned warehouses or location.
 
+## Tech Stack
+
+- **Backend**: FastAPI (Python web framework), SQLAlchemy (ORM), PostgreSQL (database), Pydantic (data validation)
+- **Frontend**: React (JavaScript library), Vite (build tool), Tailwind CSS (styling), Axios (HTTP client)
+- **Authentication**: JWT tokens, role-based access control
+- **Deployment**: Docker, Docker Compose
+- **Testing**: Pytest (backend unit tests)
+
 ## Getting Started
 
 ### Prerequisites
@@ -48,15 +56,44 @@ cp frontend/.env.example frontend/.env
 docker-compose up --build
 ```
 
-4. The backend API will be available at `http://localhost:8000`.
-5. The frontend UI will be available at `http://localhost:3000`.
+4. The backend API will be available at `http://localhost:3002`.
+5. The frontend UI will be available at `http://localhost:3001`.
+
+## Running Tests
+
+To run the backend test suite, execute the following command from the project root:
+
+```bash
+pytest backend/tests
+```
+
+## Design Choices
+
+### Why FastAPI over Flask?
+
+FastAPI was chosen over Flask for this project due to its modern, high-performance capabilities and built-in features that align well with building robust APIs:
+
+- **Automatic API Documentation**: FastAPI generates interactive Swagger UI and ReDoc documentation automatically from the code, reducing manual documentation efforts.
+- **Type Safety and Validation**: Leveraging Pydantic models for request/response validation ensures data integrity and provides clear error messages.
+- **Asynchronous Support**: Native support for async/await allows for better handling of concurrent requests, improving scalability.
+- **Performance**: Built on Starlette and Pydantic, FastAPI offers excellent performance comparable to Node.js and Go frameworks.
+- **Dependency Injection**: Built-in dependency injection system simplifies code organization and testing.
+
+### Architectural Patterns
+
+- **RESTful API Design**: The backend follows REST principles with clear resource endpoints (e.g., `/products`, `/warehouses`) and standard HTTP methods.
+- **Role-Based Access Control (RBAC)**: Implemented using JWT tokens and dependency injection to enforce permissions based on user roles (Admin, Warehouse Owner, Normal User).
+- **Layered Architecture**: Separation of concerns with distinct layers for API endpoints, business logic (CRUD operations), data models, and schemas.
+- **Dependency Injection**: Used throughout the FastAPI app for authentication, database sessions, and role checks to promote modularity and testability.
+- **Database ORM**: SQLAlchemy provides an abstraction layer over PostgreSQL, enabling efficient querying and migrations.
+- **Frontend State Management**: React with context API for authentication state, keeping the UI responsive and synchronized.
 
 ## API Documentation
 
 The backend API is built with FastAPI and provides automatic interactive API documentation:
 
-- **Swagger UI**: Visit `http://localhost:8000/docs` for the interactive API documentation.
-- **ReDoc**: Visit `http://localhost:8000/redoc` for an alternative API documentation view.
+- **Swagger UI**: Visit `http://localhost:3002/docs` for the interactive API documentation.
+- **ReDoc**: Visit `http://localhost:3002/redoc` for an alternative API documentation view.
 
 The documentation includes all available endpoints, request/response schemas, and allows testing endpoints directly from the browser.
 
