@@ -58,7 +58,7 @@ export default function WarehousesPage() {
   };
 
   const remove = async (id) => {
-    if (!confirm("Delete warehouse? This will also remove associated stock movements.")) return;
+    if (!confirm("Delete warehouse? This will delete all associated stock movements.")) return;
     try {
       await warehouses.remove(id, token);
       load();

@@ -12,20 +12,28 @@ function WarehouseForm({ onSubmit, initial, onCancel }) {
     e.preventDefault();
     setIsGeocoding(true);
     setLocationError("");
+    let latitude = null;
+    let longitude = null;
     try {
       const coords = await geocodeLocation(location);
-      onSubmit({
-        name,
-        location,
-        is_available: isAvailable,
-        latitude: coords.latitude,
-        longitude: coords.longitude
-      });
+      latitude = coords.latitude;
+      longitude = coords.longitude;
     } catch (error) {
-      setLocationError("Failed to geocode location. Please enter a valid location (e.g., city, address).");
+      setLocationError("Failed to geocode location. Using existing coordinates or none.");
+      if (initial) {
+        latitude = initial.latitude;
+        longitude = initial.longitude;
+      }
     } finally {
       setIsGeocoding(false);
     }
+    onSubmit({
+      name,
+      location,
+      is_available: isAvailable,
+      latitude,
+      longitude
+    });
   };
 
   return (

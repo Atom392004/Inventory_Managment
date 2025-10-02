@@ -93,11 +93,9 @@ def update_warehouse(warehouse_id: int, payload: schemas.WarehouseCreate, db: Se
     wh = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
     if not wh:
         raise HTTPException(status_code=404, detail="Warehouse not found")
-    if current_user.role == "admin":
-        pass
-    elif current_user.role == "warehouse_owner" and wh.owner_id != current_user.id:
+    if current_user.role not in ["admin", "warehouse_owner"]:
         raise HTTPException(status_code=403, detail="Forbidden")
-    else:
+    if current_user.role == "warehouse_owner" and wh.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
     # unique name constraint
     conflict = db.query(models.Warehouse).filter(models.Warehouse.name == payload.name, models.Warehouse.id != warehouse_id).first()
@@ -117,12 +115,12 @@ def delete_warehouse(warehouse_id: int, db: Session = Depends(get_db), current_u
     wh = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
     if not wh:
         raise HTTPException(status_code=404, detail="Warehouse not found")
-    if current_user.role == "admin":
-        pass
-    elif current_user.role == "warehouse_owner" and wh.owner_id != current_user.id:
+    if current_user.role not in ["admin", "warehouse_owner"]:
         raise HTTPException(status_code=403, detail="Forbidden")
-    else:
+    if current_user.role == "warehouse_owner" and wh.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
+    # Delete associated stock movements before deleting the warehouse
+    db.query(models.StockMovement).filter(models.StockMovement.warehouse_id == warehouse_id).delete()
     db.delete(wh)
     db.commit()
     return
