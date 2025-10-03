@@ -11,6 +11,8 @@ import StockMovementsPage from "./pages/StockMovementsPage";
 import ScrapedProductsPage from "./pages/ScrapedProductsPage";
 import ProfilePage from "./pages/ProfilePage";
 import AnalyticsPage from "./pages/AnalyticsPage";
+import PendingApprovalsPage from "./pages/PendingApprovalsPage";
+import UserManagementPage from "./pages/UserManagementPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import { AuthProvider, useAuth } from "./state/auth";
 import RegisterPage from "./pages/RegisterPage";
@@ -40,6 +42,8 @@ export default function App(){
           <Route path="stock-movements" element={<StockMovementsPage />} />
           <Route path="scraped-products" element={<ScrapedProductsPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="pending-approvals" element={<PendingApprovalsPage />} />
+          <Route path="user-management" element={<UserManagementPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />

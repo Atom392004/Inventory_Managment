@@ -42,3 +42,11 @@ async def get_current_active_user(
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
+
+async def get_current_warehouse_owner(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """Get current user if warehouse owner."""
+    if current_user.role != "warehouse_owner":
+        raise HTTPException(status_code=403, detail="Not a warehouse owner")
+    return current_user

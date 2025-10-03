@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../state/auth";
-import { auth, dashboard } from "../api/apiClient";
+import { auth, dashboard } from "../api/apiClient.jsx";
 import { Button } from "../components/ui/Button.tsx";
 import { Card } from "../components/ui/Card.tsx";
 

@@ -75,6 +75,31 @@ class UserWarehouseAssignment(Base):
         UniqueConstraint('user_id', 'warehouse_id', name='unique_user_warehouse_assignment'),
     )
 
+class StockMovementRequest(Base):
+    __tablename__ = "stock_movement_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)  # For in/out
+    from_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)  # For transfers
+    to_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)  # For transfers
+    movement_type = Column(String(50), nullable=False)  # in, out, transfer
+    quantity = Column(Integer, nullable=False)
+    notes = Column(Text)
+    status = Column(String(20), default="pending", nullable=False)  # pending, approved, rejected
+    rejection_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+
+    product = relationship("Product")
+    warehouse = relationship("Warehouse", foreign_keys=[warehouse_id])
+    from_warehouse = relationship("Warehouse", foreign_keys=[from_warehouse_id])
+    to_warehouse = relationship("Warehouse", foreign_keys=[to_warehouse_id])
+
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Requester
+    user = relationship("User", foreign_keys=[user_id])
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Approver
+    approver = relationship("User", foreign_keys=[approved_by])
+
 class StockMovement(Base):
     __tablename__ = "stock_movements"
     id = Column(Integer, primary_key=True, index=True)

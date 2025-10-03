@@ -33,6 +33,10 @@ from .stock_movement_schemas import (
     StockMovementCreate,
     StockMovementInDB,
     StockTransferCreate,
+    StockMovementRequestBase,
+    StockMovementRequestCreate,
+    StockMovementRequestInDB,
+    ApproveRequest,
 )
 
 from .assignment_schemas import (

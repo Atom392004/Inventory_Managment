@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { stockMovements, products, warehouses } from "../api/apiClient.jsx";
 import { useAuth } from "../state/auth";
+import PendingStockRequests from "../components/PendingStockRequests";
 
 export default function StockMovementsPage() {
   const { token, user } = useAuth();
@@ -139,6 +140,9 @@ export default function StockMovementsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">📦 Stock Movements</h1>
+
+      {/* Pending Requests Section */}
+      <PendingStockRequests />
 
       {/* Form */}
       {user && (

@@ -7,6 +7,29 @@ from app.auth.admin_dependencies import get_current_admin_user
 
 router = APIRouter()
 
+from app.core.security import get_password_hash
+
+@router.post("/users", response_model=schemas.User)
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), admin = Depends(get_current_admin_user)):
+    existing = db.query(models.User).filter(models.User.username == user.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    existing = db.query(models.User).filter(models.User.email == user.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already exists")
+    hashed_password = get_password_hash(user.password)
+    db_user = models.User(
+        username=user.username,
+        email=user.email,
+        hashed_password=hashed_password,
+        role=user.role,
+        location=user.location
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
 @router.get("/users", response_model=list[schemas.User])
 def list_users(db: Session = Depends(get_db), admin = Depends(get_current_admin_user)):
     users = db.query(models.User).all()
@@ -50,6 +73,17 @@ def update_user(user_id: int, payload: schemas.UserUpdate, db: Session = Depends
         user.location = payload.location
     db.commit()
     return {"id": user.id, "username": user.username, "email": user.email, "role": user.role, "location": user.location}
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db), admin = Depends(get_current_admin_user)):
+    user = db.query(models.User).filter(models.User.id==user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.role == "admin":
+        raise HTTPException(status_code=400, detail="Cannot delete admin users")
+    db.delete(user)
+    db.commit()
+    return {"message": "User deleted successfully"}
 
 @router.get("/analytics/global")
 def global_analytics(db: Session = Depends(get_db), admin = Depends(get_current_admin_user)):
