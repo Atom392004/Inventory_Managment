@@ -1,31 +1,60 @@
-# version field removed as it is obsolete
 services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: app/Dockerfile
-    env_file:
-      - ./.env
+  db:
+    image: postgres:15
     environment:
-      - DATABASE_URL=postgresql://postgres:QC%402025@host.docker.internal:5432/Inventory_mang
-      - API_SECRET_KEY=your-super-secret-key-change-this-in-production
-      - PYTHONPATH=/app
-    volumes:
-      - ./backend/app:/app/app
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     ports:
-      - "3002:3002"
-    command: >
-      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 3002 --reload"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
 
-  frontend:
-    build:
-      context: ./frontend
+  backend:
+    build: 
+      context: ./backend
       dockerfile: Dockerfile
     environment:
-      - VITE_API_URL=http://backend:3002
+      - DATABASE_URL=${DATABASE_URL}
+      - API_SECRET_KEY=${API_SECRET_KEY}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
-      - "3001:80"
+      - "3002:3002"
+    networks:
+      - app-network
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/alembic.ini:/app/alembic.ini
+
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
     depends_on:
       - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

@@ -1,0 +1,7 @@
+- [ ] Create docker-compose.yml with db, backend, frontend services
+- [ ] Create frontend/Dockerfile
+- [ ] Create .env.example
+- [ ] Create start_local.sh for local development
+- [ ] Update README.md with instructions for local and Docker modes
+- [ ] Test local mode
+- [ ] Test Docker mode

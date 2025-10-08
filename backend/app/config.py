@@ -1,9 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-# Load .env only if not on Render (to avoid overriding Render's env vars)
-if not os.getenv("RENDER"):
-    load_dotenv()
+load_dotenv()
 
 class Settings:
     DATABASE_URL: str = os.getenv("DATABASE_URL")

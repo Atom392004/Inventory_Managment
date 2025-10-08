@@ -2,6 +2,88 @@
 
 This project is a full-stack inventory management system with role-based authentication and authorization. It supports three user roles: Admin, Warehouse Owner, and Normal User. Each role has different access levels and permissions.
 
+## Quick Start Guide
+
+### Option 1: Running with Docker (Recommended)
+
+1. Install Prerequisites:
+   - [Docker Desktop](https://www.docker.com/products/docker-desktop/) for Windows/Mac
+   - [Docker Engine](https://docs.docker.com/engine/install/) for Linux
+
+2. Clone the repository:
+   ```bash
+   git clone https://github.com/Atom392004/Inventory_Managment.git
+   cd Inventory_Managment
+   ```
+
+3. Create `.env` file in the root directory:
+   ```bash
+   # Copy the example .env file
+   cp .env.example .env
+   # Edit the .env file with your preferred text editor
+   # Make sure to change the passwords!
+   ```
+
+4. Start the application:
+   ```bash
+   docker-compose up --build
+   ```
+
+5. Access the application:
+   - Frontend: http://localhost:80
+   - Backend API: http://localhost:3002
+   - API Documentation: http://localhost:3002/docs
+
+### Option 2: Running Locally (Development)
+
+1. Install Prerequisites:
+   - Python 3.11 or higher
+   - Node.js 18 or higher
+   - PostgreSQL 15
+
+2. Set up the backend:
+   ```bash
+   # Navigate to backend directory
+   cd backend
+
+   # Create and activate virtual environment
+   python -m venv venv
+   # On Windows:
+   .\venv\Scripts\activate
+   # On Linux/Mac:
+   source venv/bin/activate
+
+   # Install dependencies
+   pip install -r app/requirements.txt
+
+   # Set up environment variables
+   copy .env.example .env
+   # Edit .env with your database credentials
+
+   # Run migrations
+   alembic upgrade head
+
+   # Start the backend server
+   cd app
+   uvicorn main:app --reload --port 3002
+   ```
+
+3. Set up the frontend:
+   ```bash
+   # In a new terminal, navigate to frontend directory
+   cd frontend
+
+   # Install dependencies
+   npm install
+
+   # Start development server
+   npm run dev
+   ```
+
+4. Access the application:
+   - Frontend: http://localhost:3001
+   - Backend API: http://localhost:3002
+
 ## Features
 
 - User authentication and role-based access control
@@ -27,14 +109,15 @@ This project is a full-stack inventory management system with role-based authent
 - **Deployment**: Docker, Docker Compose
 - **Testing**: Pytest (backend unit tests)
 
-## Getting Started
+## Getting Started with Docker
 
 ### Prerequisites
 
-- Docker and Docker Compose installed on your machine
+- Docker Desktop installed on your machine (Windows/Mac) or Docker Engine (Linux)
+- Docker Compose installed
 - Git installed
 
-### Setup Instructions
+### Docker Setup Instructions
 
 1. Clone the repository:
 
@@ -43,21 +126,77 @@ git clone <your-repo-url>
 cd <your-repo-directory>
 ```
 
-2. Copy the example environment files and customize if needed:
+2. Create a `.env` file in the root directory with the following content (modify the values as needed):
 
-```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
+```env
+POSTGRES_DB=inv_man
+POSTGRES_USER=inv_user
+POSTGRES_PASSWORD=your_strong_password_here
+DATABASE_URL=postgresql://inv_user:your_strong_password_here@db:5432/inv_man
+API_SECRET_KEY=your_secret_key_here
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=adminpass
+ADMIN_EMAIL=admin@example.com
+ALLOWED_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
 ```
 
 3. Build and start the application using Docker Compose:
 
 ```bash
+# First time build
 docker-compose up --build
+
+# Subsequent runs
+docker-compose up
 ```
 
-4. The backend API will be available at `http://localhost:3002`.
-5. The frontend UI will be available at `http://localhost:3001`.
+4. The services will be available at:
+   - Frontend: `http://localhost:80`
+   - Backend API: `http://localhost:3002`
+   - PostgreSQL Database: `localhost:5432`
+
+### Accessing PostgreSQL Database
+
+To view and manage the database data, you can use tools like:
+
+1. **pgAdmin 4**:
+   - Install pgAdmin 4 from [https://www.pgadmin.org/](https://www.pgadmin.org/)
+   - Connect using these details:
+     - Host: localhost
+     - Port: 5432
+     - Database: inv_man
+     - Username: inv_user
+     - Password: (the one you set in .env file)
+
+2. **DBeaver**:
+   - Install DBeaver from [https://dbeaver.io/](https://dbeaver.io/)
+   - Create a new PostgreSQL connection with the same details as above
+
+3. **Using Docker CLI**:
+   ```bash
+   # Connect to PostgreSQL container
+   docker-compose exec db psql -U inv_user -d inv_man
+   ```
+
+### Managing Docker Containers
+
+```bash
+# View running containers
+docker-compose ps
+
+# View container logs
+docker-compose logs -f
+
+# Stop containers
+docker-compose down
+
+# Stop containers and remove volumes (will delete database data)
+docker-compose down -v
+
+# Rebuild specific service
+docker-compose up -d --build backend
+```
 
 ## Running Tests
 
@@ -120,10 +259,109 @@ npm run dev
 
 ## Project Structure
 
-- `backend/`: FastAPI backend source code and database migrations
-- `frontend/`: React frontend source code
-- `docker-compose.yml`: Docker Compose configuration for backend and frontend
-- `README.md`: Project documentation
+```
+inventory_management/
+├── .env                     # Environment variables
+├── docker-compose.yml       # Docker services configuration
+├── backend/
+│   ├── alembic/            # Database migrations
+│   ├── app/
+│   │   ├── api/            # API endpoints
+│   │   ├── auth/           # Authentication logic
+│   │   ├── crud/           # Database operations
+│   │   ├── models.py       # Database models
+│   │   ├── main.py        # Application entry point
+│   │   └── requirements.txt
+│   ├── Dockerfile          # Backend container configuration
+│   └── alembic.ini         # Alembic configuration
+├── frontend/
+│   ├── src/
+│   │   ├── components/     # React components
+│   │   ├── pages/         # Page components
+│   │   ├── api/           # API client
+│   │   └── main.jsx       # Frontend entry point
+│   ├── Dockerfile         # Frontend container configuration
+│   └── package.json       # Frontend dependencies
+└── README.md              # Project documentation
+
+## Database Management
+
+### Viewing Database Data
+
+1. Using pgAdmin 4:
+   - Download and install [pgAdmin 4](https://www.pgadmin.org/download/)
+   - Add New Server:
+     - Host: localhost
+     - Port: 5432
+     - Database: inventory_db (or value from POSTGRES_DB)
+     - Username: inventory_user (or value from POSTGRES_USER)
+     - Password: (value from POSTGRES_PASSWORD)
+
+2. Using DBeaver:
+   - Download and install [DBeaver](https://dbeaver.io/download/)
+   - Create new connection:
+     - Choose PostgreSQL
+     - Fill in the same details as above
+
+### Database Migrations
+
+```bash
+# When running with Docker
+docker-compose exec backend alembic upgrade head
+
+# When running locally
+cd backend
+alembic upgrade head
+```
+
+## Troubleshooting
+
+### Docker Issues
+
+1. Port conflicts:
+   ```bash
+   # Error: port is already allocated
+   # Solution: Stop the conflicting service or change ports in docker-compose.yml
+   netstat -ano | findstr "3002"  # Windows
+   lsof -i :3002                  # Linux/Mac
+   ```
+
+2. Database connection issues:
+   - Check if the database container is running:
+     ```bash
+     docker-compose ps
+     ```
+   - Verify environment variables in .env file
+   - Check database logs:
+     ```bash
+     docker-compose logs db
+     ```
+
+3. Container build fails:
+   ```bash
+   # Remove all containers and volumes
+   docker-compose down -v
+   # Rebuild from scratch
+   docker-compose up --build
+   ```
+
+### Local Development Issues
+
+1. Backend server won't start:
+   - Check if PostgreSQL is running
+   - Verify database credentials in .env
+   - Ensure all dependencies are installed:
+     ```bash
+     pip install -r requirements.txt
+     ```
+
+2. Frontend development server issues:
+   - Clear node_modules and reinstall:
+     ```bash
+     rm -rf node_modules
+     npm install
+     ```
+   - Check for conflicting port usage
 
 ## Important Scripts
 

@@ -1,6 +1,6 @@
 ﻿import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3002';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Create axios instance with error handling
 const api = axios.create({
@@ -73,7 +73,7 @@ export const auth = {
       console.log('Attempting login for username:', username);
       const formData = toFormData({ username, password });
 
-      const response = await api.post('/auth/login', formData, {
+      const response = await api.post('/auth/login', formData.toString(), {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Accept': 'application/json'

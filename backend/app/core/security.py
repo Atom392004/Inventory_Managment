@@ -5,9 +5,9 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-SECRET_KEY = os.environ.get("API_SECRET_KEY", "dev-secret-key-change-me")
+SECRET_KEY = os.environ.get("API_SECRET_KEY", "your-super-secret-key-change-this-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES","60"))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES","1440"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
